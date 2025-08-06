@@ -4,6 +4,7 @@
     <inspection_tool class="GoDfaErrorMayBeNotNil" enabled="true" level="WARNING" enabled_by_default="true">
       <methods>
         <method importPath="staking-interaction/contracts" receiver="*Staking" name="Stake" />
+        <method importPath="staking-interaction/contracts" receiver="*Staking" name="Withdraw" />
       </methods>
     </inspection_tool>
   </profile>

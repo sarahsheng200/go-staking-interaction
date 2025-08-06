@@ -62,7 +62,7 @@ func InitContract() gin.HandlerFunc {
 		c.Set("stakingContract", stakingContract)
 		c.Set("auth", auth)
 		c.Set("fromAddress", fromAddress.String())
-		
+
 		fmt.Println("Go Ethereum SDK初始化完成")
 	}
 
