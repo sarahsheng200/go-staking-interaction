@@ -7,6 +7,7 @@ import (
 	"net/http"
 	constant "staking-interaction/common"
 	"staking-interaction/contracts"
+	"strconv"
 )
 
 type Response struct {
@@ -59,12 +60,16 @@ func Withdraw(c *gin.Context) {
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "request body invalid"})
 	}
-	index := c.DefaultPostForm("index", "0")
-
+	indexStr := c.DefaultPostForm("index", "0")
+	index, err := strconv.ParseInt(indexStr, 10, 64)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid index"})
+	}
 	stakingContract := c.MustGet("stakingContract").(*contracts.Staking)
 	auth := c.MustGet("auth").(*bind.TransactOpts)
 
 	trans, err := stakingContract.Withdraw(auth, big.NewInt(index))
+
 	if trans == nil || err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"withdrawn transaction error": err.Error()})
 	}
