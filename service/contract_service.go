@@ -7,32 +7,21 @@ import (
 	"net/http"
 	constant "staking-interaction/common"
 	"staking-interaction/contracts"
+	"staking-interaction/model"
+	"staking-interaction/repository"
 	"strconv"
+	"time"
 )
 
-type Response struct {
-	Hash            string `json:"hash"`
-	ContractAddress string `json:"contractAddress"`
-	FromAddress     string `json:"fromAddress"`
-	GasUsed         uint64 `json:"gasUsed"`
-}
-type StakeRequest struct {
-	Amount int64 `json:"amount"`
-	Period uint8 `json:"period"`
-}
-
-type WithDrawnRequest struct {
-	Index int64 `json:"index"`
-}
-
 func Stake(c *gin.Context) {
-	var request StakeRequest
-	var response Response
+	var request model.StakeRequest
+	var response model.Response
 	stakingContract := c.MustGet("stakingContract").(*contracts.Staking)
 	auth := c.MustGet("auth").(*bind.TransactOpts)
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "request body invalid"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
+		return
 	}
 
 	trans, err := stakingContract.Stake(
@@ -40,30 +29,36 @@ func Stake(c *gin.Context) {
 		big.NewInt(request.Amount),
 		request.Period,
 	)
-	if trans == nil || err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"stake transaction error": err.Error()})
 
+	if trans == nil || err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "stake transaction ", "error": err.Error()})
+		return
 	}
 
 	response.Hash = trans.Hash().String()
 	response.ContractAddress = constant.CONTRACT_ADDRESS
 	response.FromAddress = c.MustGet("fromAddress").(string)
-	response.GasUsed = trans.Gas()
+	response.GasUsed = float64(trans.Gas())
+	response.Method = "stake"
+
+	StoreStakeInfo(response)
 
 	c.JSON(http.StatusOK, gin.H{"msg": "Stake success!", "data": response})
 }
 
 func Withdraw(c *gin.Context) {
-	var request WithDrawnRequest
-	var response Response
+	var request model.WithDrawnRequest
+	var response model.Response
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "request body invalid"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
+		return
 	}
 	indexStr := c.DefaultPostForm("index", "0")
 	index, err := strconv.ParseInt(indexStr, 10, 64)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid index"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "invalid index", "error": err.Error()})
+		return
 	}
 	stakingContract := c.MustGet("stakingContract").(*contracts.Staking)
 	auth := c.MustGet("auth").(*bind.TransactOpts)
@@ -71,11 +66,34 @@ func Withdraw(c *gin.Context) {
 	trans, err := stakingContract.Withdraw(auth, big.NewInt(index))
 
 	if trans == nil || err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"withdrawn transaction error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "withdrawn transaction error", "error": err.Error()})
+		return
 	}
 
 	response.Hash = trans.Hash().String()
 	response.ContractAddress = constant.CONTRACT_ADDRESS
 	response.FromAddress = c.MustGet("fromAddress").(string)
-	response.GasUsed = trans.Gas()
+	response.GasUsed = float64(trans.Gas())
+	response.Method = "withdraw"
+
+	StoreStakeInfo(response)
+
+	c.JSON(http.StatusOK, gin.H{"msg": "Withdrawn success!", "data": response})
+}
+
+func StoreStakeInfo(response model.Response) {
+	var stake model.Stake
+	stake.Hash = response.Hash
+	stake.GasUsed = response.GasUsed
+	stake.FromAddress = response.FromAddress
+	stake.ContractAddress = response.ContractAddress
+	stake.Method = response.Method
+	stake.Timestamp = time.Now()
+	repository.AddStakeInfo(stake)
+}
+
+func GetAllStakesById(c *gin.Context) {
+	id := c.Param("id")
+	stake := repository.GetAllStakesById(id)
+	c.JSON(http.StatusOK, gin.H{"msg": "success", "data": stake})
 }

@@ -19,5 +19,6 @@ func InitRouter() *gin.Engine {
 		group.POST("/withdraw", service.Withdraw)
 	}
 
+	group.GET("stake/:id", service.GetAllStakesById)
 	return router
 }

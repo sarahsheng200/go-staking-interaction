@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"staking-interaction/database"
 	srouter "staking-interaction/router"
 	"syscall"
 	"time"
@@ -16,7 +17,7 @@ import (
 const PORT = 8084
 
 func main() {
-
+	database.MysqlConn()
 	router := srouter.InitRouter()
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", PORT),
