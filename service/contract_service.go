@@ -16,7 +16,7 @@ import (
 func Stake(c *gin.Context) {
 	var request model.StakeRequest
 	var response model.Response
-	stakingContract := c.MustGet("stakingContract").(*contracts.Staking)
+	stakingContract := c.MustGet("stakingContract").(*contracts.Contracts)
 	auth := c.MustGet("auth").(*bind.TransactOpts)
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -31,7 +31,7 @@ func Stake(c *gin.Context) {
 	)
 
 	if trans == nil || err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "stake transaction ", "error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "stake transaction error", "error": err.Error()})
 		return
 	}
 
@@ -60,7 +60,7 @@ func Withdraw(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "invalid index", "error": err.Error()})
 		return
 	}
-	stakingContract := c.MustGet("stakingContract").(*contracts.Staking)
+	stakingContract := c.MustGet("stakingContract").(*contracts.Contracts)
 	auth := c.MustGet("auth").(*bind.TransactOpts)
 
 	trans, err := stakingContract.Withdraw(auth, big.NewInt(index))

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/database"
+	"staking-interaction/middleware"
 	srouter "staking-interaction/router"
 	"syscall"
 	"time"
@@ -30,6 +31,8 @@ func main() {
 			log.Fatal("Error starting server :", err)
 		}
 	}()
+
+	middleware.ListenToEvents()
 
 	// 创建系统信号接收器
 	signalChan := make(chan os.Signal)

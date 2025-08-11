@@ -20,5 +20,6 @@ func InitRouter() *gin.Engine {
 	}
 
 	group.GET("stake/:id", service.GetAllStakesById)
+
 	return router
 }
