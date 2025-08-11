@@ -119,7 +119,6 @@ func ListenToEvents() {
 				}
 
 				for _, l := range logs {
-					fmt.Println(l)
 					switch l.Topics[0] {
 					case stakedEventId:
 						var event contracts.ContractsStaked
