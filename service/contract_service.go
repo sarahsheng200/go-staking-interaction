@@ -9,7 +9,6 @@ import (
 	"staking-interaction/contracts"
 	"staking-interaction/model"
 	"staking-interaction/repository"
-	"strconv"
 	"time"
 )
 
@@ -54,16 +53,11 @@ func Withdraw(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
-	indexStr := c.DefaultPostForm("index", "0")
-	index, err := strconv.ParseInt(indexStr, 10, 64)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "invalid index", "error": err.Error()})
-		return
-	}
+
 	stakingContract := c.MustGet("stakingContract").(*contracts.Contracts)
 	auth := c.MustGet("auth").(*bind.TransactOpts)
 
-	trans, err := stakingContract.Withdraw(auth, big.NewInt(index))
+	trans, err := stakingContract.Withdraw(auth, &request.Index)
 
 	if trans == nil || err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "withdrawn transaction error", "error": err.Error()})

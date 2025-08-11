@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"math/big"
+	"time"
+)
 
 type Response struct {
 	Hash            string  `json:"hash"`
@@ -15,13 +18,13 @@ type StakeRequest struct {
 }
 
 type WithDrawnRequest struct {
-	Index int64 `json:"index"`
+	Index big.Int `json:"index"`
 }
 
 // Stake 质押记录表对应的结构体
 type Stake struct {
 	ID              int64     `json:"id" gorm:"column:id;primaryKey;autoIncrement" comment:"自增主键ID"`
-	IndexNum        int       `json:"index_num" gorm:"column:index_num;not null" comment:"索引编号"`
+	IndexNum        big.Int   `json:"index_num" gorm:"column:index_num;not null" comment:"索引编号"`
 	Hash            string    `json:"hash" gorm:"column:hash;type:varchar(100);not null;uniqueIndex:uk_hash" comment:"交易哈希"`
 	ContractAddress string    `json:"contract_address" gorm:"column:contract_address;type:varchar(100);not null" comment:"合约地址"`
 	FromAddress     string    `json:"from_address" gorm:"column:from_address;type:varchar(100);not null" comment:"发起地址"`

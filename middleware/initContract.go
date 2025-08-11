@@ -24,7 +24,7 @@ func InitContract() gin.HandlerFunc {
 		log.Println("InitContract-----")
 		// 初始化客户端
 
-		client, err := ethclient.Dial("https://data-seed-prebsc-1-s1.binance.org:8545")
+		client, err := ethclient.Dial("https://data-seed-prebsc-2-s1.binance.org:8545")
 		if err != nil {
 			log.Fatalf("Failed to connect to the BSC network: %v", err)
 		}
@@ -108,9 +108,7 @@ func ListenToEvents() {
 
 		if currentBlock > startBlock {
 			for blockNum := startBlock + 1; blockNum <= currentBlock; blockNum++ {
-
 				logs, err := client.FilterLogs(context.Background(), ethereum.FilterQuery{
-					//BlockHash: nil,
 					FromBlock: big.NewInt(int64(blockNum)),
 					ToBlock:   big.NewInt(int64(blockNum)),
 					Addresses: []common.Address{contractAddress},
@@ -121,6 +119,7 @@ func ListenToEvents() {
 				}
 
 				for _, l := range logs {
+					fmt.Println(l)
 					switch l.Topics[0] {
 					case stakedEventId:
 						var event contracts.ContractsStaked
