@@ -10,4 +10,5 @@ const (
 	MYSQL_DATABASE   = "web3-contract"
 	MYSQL_URL        = "127.0.0.1:3306"
 	MYSQL_CONFIG     = "charset=utf8&parseTime=True&loc=Local"
+	RAW_URL          = "https://data-seed-prebsc-1-s1.binance.org:8545"
 )

@@ -1,27 +1,26 @@
 package service
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/gin-gonic/gin"
 	"math/big"
 	"net/http"
 	constant "staking-interaction/common"
-	"staking-interaction/contracts"
 	"staking-interaction/model"
 	"staking-interaction/repository"
-	"time"
 )
 
 func Stake(c *gin.Context) {
 	var request model.StakeRequest
 	var response model.Response
-	stakingContract := c.MustGet("stakingContract").(*contracts.Contracts)
-	auth := c.MustGet("auth").(*bind.TransactOpts)
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
+
+	contract := model.GetInitContract()
+	stakingContract := contract.StakingContract
+	auth := contract.Auth
 
 	trans, err := stakingContract.Stake(
 		auth,
@@ -36,11 +35,9 @@ func Stake(c *gin.Context) {
 
 	response.Hash = trans.Hash().String()
 	response.ContractAddress = constant.CONTRACT_ADDRESS
-	response.FromAddress = c.MustGet("fromAddress").(string)
+	response.FromAddress = contract.FromAddress
 	response.GasUsed = float64(trans.Gas())
 	response.Method = "stake"
-
-	StoreStakeInfo(response)
 
 	c.JSON(http.StatusOK, gin.H{"msg": "Stake success!", "data": response})
 }
@@ -49,13 +46,14 @@ func Withdraw(c *gin.Context) {
 	var request model.WithDrawnRequest
 	var response model.Response
 
+	contract := model.GetInitContract()
+	stakingContract := contract.StakingContract
+	auth := contract.Auth
+
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
-
-	stakingContract := c.MustGet("stakingContract").(*contracts.Contracts)
-	auth := c.MustGet("auth").(*bind.TransactOpts)
 
 	trans, err := stakingContract.Withdraw(auth, &request.Index)
 
@@ -66,23 +64,14 @@ func Withdraw(c *gin.Context) {
 
 	response.Hash = trans.Hash().String()
 	response.ContractAddress = constant.CONTRACT_ADDRESS
-	response.FromAddress = c.MustGet("fromAddress").(string)
+	response.FromAddress = contract.FromAddress
 	response.GasUsed = float64(trans.Gas())
 	response.Method = "withdraw"
-
-	StoreStakeInfo(response)
 
 	c.JSON(http.StatusOK, gin.H{"msg": "Withdrawn success!", "data": response})
 }
 
-func StoreStakeInfo(response model.Response) {
-	var stake model.Stake
-	stake.Hash = response.Hash
-	stake.GasUsed = response.GasUsed
-	stake.FromAddress = response.FromAddress
-	stake.ContractAddress = response.ContractAddress
-	stake.Method = response.Method
-	stake.Timestamp = time.Now()
+func StoreStakeInfo(stake model.Stake) {
 	repository.AddStakeInfo(stake)
 }
 

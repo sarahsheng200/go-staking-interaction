@@ -8,7 +8,8 @@ import (
 
 func AddStakeInfo(stake model.Stake) {
 	database.DB.Create(&stake)
-	log.Printf("Add stake info to database")
+
+	log.Printf("Add " + stake.Method + " info to database success, indexId: " + stake.IndexNum)
 }
 
 func GetAllStakesById(id string) model.Stake {

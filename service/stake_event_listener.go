@@ -1,76 +1,20 @@
-package middleware
+package service
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/gin-gonic/gin"
 	"log"
 	"math/big"
 	constant "staking-interaction/common"
 	"staking-interaction/contracts"
+	"staking-interaction/model"
 	"strings"
 	"time"
 )
-
-func InitContract() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		log.Println("InitContract-----")
-		// 初始化客户端
-
-		client, err := ethclient.Dial("https://data-seed-prebsc-2-s1.binance.org:8545")
-		if err != nil {
-			log.Fatalf("Failed to connect to the BSC network: %v", err)
-		}
-		defer client.Close()
-
-		// 加载私钥
-		privateKey, err := crypto.HexToECDSA(constant.PRIVATE_KEY)
-		if err != nil {
-			log.Fatalf("Failed to parse private key: %v", err)
-		}
-
-		publicKey := privateKey.Public()
-		publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-		if !ok {
-			log.Fatal("Cannot assert type: publicKey is not of type *ecdsa.PublicKey")
-		}
-		fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
-		// 获取链ID
-		chainID, err := client.ChainID(context.Background())
-		if err != nil {
-			log.Fatalf("Failed to get chain ID: %v", err)
-		}
-
-		// 创建授权事务
-		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
-		if err != nil {
-			log.Fatalf("Failed to create authorized transactor: %v", err)
-		}
-
-		// 这里需要加载合约ABI和地址
-		contractAddress := common.HexToAddress(constant.CONTRACT_ADDRESS)
-
-		stakingContract, err := contracts.NewContracts(contractAddress, client)
-		if err != nil {
-			log.Fatalf("Failed to create staking contract: %v", err)
-		}
-
-		c.Set("stakingContract", stakingContract)
-		c.Set("auth", auth)
-		c.Set("fromAddress", fromAddress.String())
-		c.Set("client", client)
-
-		fmt.Println("Go Ethereum SDK初始化完成")
-	}
-}
 
 func ListenToEvents() {
 	client, err := ethclient.Dial("https://bsc-testnet-rpc.publicnode.com")
@@ -88,7 +32,6 @@ func ListenToEvents() {
 
 	stakedEventName := "Staked"
 	stakedEventId := contractABI.Events[stakedEventName].ID
-
 	withdrawnEventName := "Withdrawn"
 	withdrawnEventId := contractABI.Events[withdrawnEventName].ID
 
@@ -133,7 +76,6 @@ func ListenToEvents() {
 							log.Printf("ListenToStakedEvent: Staked failed to unpack event: %v", err)
 							continue
 						}
-
 						fmt.Printf("Staked: block number: %d, transaction hash:%v, user:%v, amount:%s, timestamp=%d,  StakedIndex=%s\n",
 							l.BlockNumber,
 							l.TxHash.Hex(),
@@ -142,6 +84,21 @@ func ListenToEvents() {
 							event.Timestamp.Int64(),
 							event.StakeIndex.String(),
 						)
+
+						stake := model.Stake{
+							IndexNum:        event.StakeIndex.String(),
+							Hash:            l.TxHash.Hex(),
+							ContractAddress: contractAddress.Hex(),
+							FromAddress:     l.Address.Hex(),
+							Method:          stakedEventName,
+							Amount:          event.Amount.String(),
+							GasUsed:         0,
+							BlockNumber:     int64(l.BlockNumber),
+							Status:          0,
+							Timestamp:       time.Now(),
+						}
+
+						StoreStakeInfo(stake)
 
 					case withdrawnEventId:
 						var event contracts.ContractsWithdrawn
@@ -165,6 +122,20 @@ func ListenToEvents() {
 							event.StakeIndex.String(),
 						)
 
+						stake := model.Stake{
+							IndexNum:        event.StakeIndex.String(),
+							Hash:            l.TxHash.Hex(),
+							ContractAddress: contractAddress.Hex(),
+							FromAddress:     l.Address.Hex(),
+							Method:          withdrawnEventName,
+							Amount:          event.TotalAmount.String(),
+							GasUsed:         0,
+							BlockNumber:     int64(l.BlockNumber),
+							Status:          0,
+							Timestamp:       time.Now(),
+						}
+
+						StoreStakeInfo(stake)
 					}
 
 				}

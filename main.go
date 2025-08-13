@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/database"
-	"staking-interaction/middleware"
 	srouter "staking-interaction/router"
+	"staking-interaction/service"
 	"syscall"
 	"time"
 )
@@ -18,7 +18,17 @@ import (
 const PORT = 8084
 
 func main() {
-	database.MysqlConn()
+	err := database.MysqlConn()
+	if err != nil {
+		log.Fatal("MySQL database connect failed: ", err)
+		return
+	}
+	defer func() {
+		err := database.CloseConn()
+		if err != nil {
+			log.Fatal("Close database failed: ", err)
+		}
+	}()
 	router := srouter.InitRouter()
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", PORT),
@@ -31,9 +41,8 @@ func main() {
 			log.Fatal("Error starting server :", err)
 		}
 	}()
-
-	middleware.ListenToEvents()
-
+	service.InitContract()
+	service.ListenToEvents()
 	// 创建系统信号接收器
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

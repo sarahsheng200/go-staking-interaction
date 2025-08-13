@@ -3,7 +3,6 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"log"
-	"staking-interaction/middleware"
 	"staking-interaction/service"
 )
 
@@ -13,12 +12,9 @@ func InitRouter() *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
-	group := router.Group("/staking").Use(middleware.InitContract())
-	{
-		group.POST("/stake", service.Stake)
-		group.POST("/withdraw", service.Withdraw)
-	}
-
+	group := router.Group("/staking")
+	group.POST("/stake", service.Stake)
+	group.POST("/withdraw", service.Withdraw)
 	group.GET("stake/:id", service.GetAllStakesById)
 
 	return router
