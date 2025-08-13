@@ -15,7 +15,6 @@ import (
 )
 
 func InitContract() {
-
 	log.Println("InitContract-----")
 	// 初始化客户端
 	client, err := ethclient.Dial(constant.RAW_URL)

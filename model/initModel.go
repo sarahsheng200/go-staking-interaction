@@ -20,7 +20,6 @@ type ContractInitInfo struct {
 }
 
 func GetInitContract() ContractInitInfo {
-
 	return contractInfo
 }
 
