@@ -43,11 +43,15 @@ func main() {
 	}()
 	service.InitContract()
 	service.ListenToEvents()
+
 	// 创建系统信号接收器
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-signalChan
 	log.Println("shutdown server...")
+
+	service.CloseListener()
+	log.Println("stake event listener closed")
 
 	// 创建5s的超时上下文
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
