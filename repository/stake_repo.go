@@ -12,8 +12,8 @@ func AddStakeInfo(stake model.Stake) {
 	log.Printf("Add " + stake.Method + " info to database success, indexId: " + stake.IndexNum)
 }
 
-func GetAllStakesById(id string) model.Stake {
+func GetAllStakesByFromAddress(fromAddress string) model.Stake {
 	var stake model.Stake
-	database.DB.Where("id = ?", id).First(&stake)
+	database.DB.Where("from_address = ?", fromAddress).First(&stake)
 	return stake
 }

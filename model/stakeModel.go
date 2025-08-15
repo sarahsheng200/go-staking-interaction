@@ -6,11 +6,10 @@ import (
 )
 
 type Response struct {
-	Hash            string  `json:"hash"`
-	ContractAddress string  `json:"contractAddress"`
-	FromAddress     string  `json:"fromAddress"`
-	GasUsed         float64 `json:"gasUsed"`
-	Method          string  `json:"method"`
+	Hash            string `json:"hash"`
+	ContractAddress string `json:"contractAddress"`
+	FromAddress     string `json:"fromAddress"`
+	Method          string `json:"method"`
 }
 type StakeRequest struct {
 	Amount int64 `json:"amount"`
@@ -30,7 +29,6 @@ type Stake struct {
 	FromAddress     string    `json:"from_address" gorm:"column:from_address;type:varchar(100);not null" comment:"发起地址"`
 	Method          string    `json:"method" gorm:"column:method;type:varchar(20);not null" comment:"操作方法：stake-质押，withdraw-提取"`
 	Amount          string    `json:"amount" gorm:"column:amount;type:varchar(255)" comment:"交易金额"`
-	GasUsed         float64   `json:"gas_used" gorm:"column:gas_used;type:decimal(10,2);default:0.00" comment:"消耗的Gas"`
 	BlockNumber     int64     `json:"block_number" gorm:"column:block_number;type:bigint" comment:"区块编号"`
 	Status          int8      `json:"status" gorm:"column:status;type:tinyint;default:0" comment:"状态：0-质押中，1-已提取"`
 	Timestamp       time.Time `json:"timestamp" gorm:"column:timestamp;type:datetime" comment:"交易时间戳"`

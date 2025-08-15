@@ -15,7 +15,7 @@ func InitRouter() *gin.Engine {
 	group := router.Group("/staking")
 	group.POST("/stake", service.Stake)
 	group.POST("/withdraw", service.Withdraw)
-	group.GET("stake/:id", service.GetAllStakesById)
+	group.GET("stake/:address", service.GetAllStakesByFromAddress)
 
 	return router
 }

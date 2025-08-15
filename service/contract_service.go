@@ -36,7 +36,6 @@ func Stake(c *gin.Context) {
 	response.Hash = trans.Hash().String()
 	response.ContractAddress = constant.CONTRACT_ADDRESS
 	response.FromAddress = contract.FromAddress
-	response.GasUsed = float64(trans.Gas())
 	response.Method = "stake"
 
 	c.JSON(http.StatusOK, gin.H{"msg": "Stake success!", "data": response})
@@ -65,7 +64,6 @@ func Withdraw(c *gin.Context) {
 	response.Hash = trans.Hash().String()
 	response.ContractAddress = constant.CONTRACT_ADDRESS
 	response.FromAddress = contract.FromAddress
-	response.GasUsed = float64(trans.Gas())
 	response.Method = "withdraw"
 
 	c.JSON(http.StatusOK, gin.H{"msg": "Withdrawn success!", "data": response})
@@ -75,8 +73,8 @@ func StoreStakeInfo(stake model.Stake) {
 	repository.AddStakeInfo(stake)
 }
 
-func GetAllStakesById(c *gin.Context) {
+func GetAllStakesByFromAddress(c *gin.Context) {
 	id := c.Param("id")
-	stake := repository.GetAllStakesById(id)
+	stake := repository.GetAllStakesByFromAddress(id)
 	c.JSON(http.StatusOK, gin.H{"msg": "success", "data": stake})
 }

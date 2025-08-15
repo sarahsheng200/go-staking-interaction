@@ -141,7 +141,6 @@ func handleLog(l types.Log, listener EventListener) {
 			FromAddress:     l.Address.Hex(),
 			Method:          stakedEventName,
 			Amount:          event.Amount.String(),
-			GasUsed:         0,
 			BlockNumber:     int64(l.BlockNumber),
 			Status:          0,
 			Timestamp:       time.Now(),
@@ -178,9 +177,8 @@ func handleLog(l types.Log, listener EventListener) {
 			FromAddress:     l.Address.Hex(),
 			Method:          withdrawnEventName,
 			Amount:          event.TotalAmount.String(),
-			GasUsed:         0,
 			BlockNumber:     int64(l.BlockNumber),
-			Status:          0,
+			Status:          1,
 			Timestamp:       time.Now(),
 		}
 
