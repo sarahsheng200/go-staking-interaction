@@ -3,7 +3,7 @@ package model
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"staking-interaction/contracts"
+	"staking-interaction/contracts/mtk"
 	"sync"
 )
 
@@ -13,7 +13,7 @@ var (
 )
 
 type ContractInitInfo struct {
-	StakingContract *contracts.Contracts
+	StakingContract *mtk.Contracts
 	Auth            *bind.TransactOpts
 	FromAddress     string
 	Client          *ethclient.Client

@@ -34,7 +34,7 @@ func Stake(c *gin.Context) {
 	}
 
 	response.Hash = trans.Hash().String()
-	response.ContractAddress = constant.CONTRACT_ADDRESS
+	response.ContractAddress = constant.STAKE_CONTRACT_ADDRESS
 	response.FromAddress = contract.FromAddress
 	response.Method = "stake"
 
@@ -62,7 +62,7 @@ func Withdraw(c *gin.Context) {
 	}
 
 	response.Hash = trans.Hash().String()
-	response.ContractAddress = constant.CONTRACT_ADDRESS
+	response.ContractAddress = constant.STAKE_CONTRACT_ADDRESS
 	response.FromAddress = contract.FromAddress
 	response.Method = "withdraw"
 

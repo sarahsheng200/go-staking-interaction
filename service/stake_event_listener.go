@@ -11,7 +11,7 @@ import (
 	"log"
 	"math/big"
 	constant "staking-interaction/common"
-	"staking-interaction/contracts"
+	"staking-interaction/contracts/mtk"
 	"staking-interaction/model"
 	"strings"
 	"time"
@@ -44,9 +44,9 @@ func ListenToEvents() {
 	client = c
 	defer client.Close()
 
-	contractAddress := common.HexToAddress(constant.CONTRACT_ADDRESS)
+	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
 
-	contractABI, err := abi.JSON(strings.NewReader(contracts.ContractsMetaData.ABI))
+	contractABI, err := abi.JSON(strings.NewReader(mtk.ContractsMetaData.ABI))
 	if err != nil {
 		log.Fatalf("ListenToStakedEvent: Failed to parse contract ABI: %v", err)
 	}
@@ -113,7 +113,7 @@ func ListenToEvents() {
 func handleLog(l types.Log, listener EventListener) {
 	switch l.Topics[0] {
 	case listener.stakedEventId:
-		var event contracts.ContractsStaked
+		var event mtk.ContractsStaked
 		if err := listener.contractABI.UnpackIntoInterface(&event, stakedEventName, l.Data); err != nil {
 			log.Printf("ListenToStakedEvent: Staked failed to unpack event: %v", err)
 			return
@@ -149,7 +149,7 @@ func handleLog(l types.Log, listener EventListener) {
 		StoreStakeInfo(stake)
 
 	case listener.withdrawnEventId:
-		var event contracts.ContractsWithdrawn
+		var event mtk.ContractsWithdrawn
 		if err := listener.contractABI.UnpackIntoInterface(&event, withdrawnEventName, l.Data); err != nil {
 			log.Printf("ListenToStakedEvent: Withdrawn failed to unpack event: %v", err)
 			return

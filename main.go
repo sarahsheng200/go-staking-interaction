@@ -41,7 +41,7 @@ func main() {
 			log.Fatal("Error starting server :", err)
 		}
 	}()
-	service.InitContract()
+	service.InitStakeContract()
 	service.ListenToEvents()
 
 	// 创建系统信号接收器

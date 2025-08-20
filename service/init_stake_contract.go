@@ -10,11 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	constant "staking-interaction/common"
-	"staking-interaction/contracts"
+	"staking-interaction/contracts/mtk"
 	"staking-interaction/model"
 )
 
-func InitContract() {
+func InitStakeContract() {
 	log.Println("InitContract-----")
 	// 初始化客户端
 	client, err := ethclient.Dial(constant.RAW_URL)
@@ -48,10 +48,10 @@ func InitContract() {
 		log.Fatalf("Failed to create authorized transactor: %v", err)
 	}
 
-	contractAddress := common.HexToAddress(constant.CONTRACT_ADDRESS)
+	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
 	//绑定合约实例
 	//creates a new instance of Contracts, bound to a specific deployed contract
-	stakingContract, err := contracts.NewContracts(contractAddress, client)
+	stakingContract, err := mtk.NewContracts(contractAddress, client)
 	if err != nil {
 		log.Fatalf("Failed to create staking contract: %v", err)
 	}
