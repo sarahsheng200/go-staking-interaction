@@ -1,19 +1,20 @@
-package model
+package airdrop
 
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"staking-interaction/contracts/mtk"
+	"staking-interaction/contracts/airdrop"
 	"sync"
 )
 
 var (
 	contractInfo ContractInitInfo
 	dataMutex    sync.RWMutex
+	nouce        int64
 )
 
 type ContractInitInfo struct {
-	StakingContract *mtk.Contracts
+	AirdropContract *airdrop.Contracts
 	Auth            *bind.TransactOpts
 	FromAddress     string
 	Client          *ethclient.Client
@@ -28,9 +29,17 @@ func NewInitContract(c ContractInitInfo) {
 	defer dataMutex.Unlock()
 
 	contractInfo = ContractInitInfo{
-		StakingContract: c.StakingContract,
+		AirdropContract: c.AirdropContract,
 		Auth:            c.Auth,
 		FromAddress:     c.FromAddress,
 		Client:          c.Client,
 	}
+}
+
+func GetNouce() int64 {
+	return nouce + 1
+}
+
+func InitNouce() {
+	nouce = 0
 }

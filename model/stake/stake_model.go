@@ -1,4 +1,4 @@
-package model
+package stake
 
 import (
 	"math/big"

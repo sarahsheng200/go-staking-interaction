@@ -11,8 +11,8 @@ import (
 	"log"
 	"math/big"
 	constant "staking-interaction/common"
-	"staking-interaction/contracts/mtk"
-	"staking-interaction/model"
+	stakeContract "staking-interaction/contracts/stake"
+	stake2 "staking-interaction/model/stake"
 	"strings"
 	"time"
 )
@@ -46,7 +46,7 @@ func ListenToEvents() {
 
 	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
 
-	contractABI, err := abi.JSON(strings.NewReader(mtk.ContractsMetaData.ABI))
+	contractABI, err := abi.JSON(strings.NewReader(stakeContract.ContractsMetaData.ABI))
 	if err != nil {
 		log.Fatalf("ListenToStakedEvent: Failed to parse contract ABI: %v", err)
 	}
@@ -113,7 +113,7 @@ func ListenToEvents() {
 func handleLog(l types.Log, listener EventListener) {
 	switch l.Topics[0] {
 	case listener.stakedEventId:
-		var event mtk.ContractsStaked
+		var event stakeContract.ContractsStaked
 		if err := listener.contractABI.UnpackIntoInterface(&event, stakedEventName, l.Data); err != nil {
 			log.Printf("ListenToStakedEvent: Staked failed to unpack event: %v", err)
 			return
@@ -134,7 +134,7 @@ func handleLog(l types.Log, listener EventListener) {
 			event.StakeIndex.String(),
 		)
 
-		stake := model.Stake{
+		stake := stake2.Stake{
 			IndexNum:        event.StakeIndex.String(),
 			Hash:            l.TxHash.Hex(),
 			ContractAddress: listener.contractAddress.Hex(),
@@ -149,7 +149,7 @@ func handleLog(l types.Log, listener EventListener) {
 		StoreStakeInfo(stake)
 
 	case listener.withdrawnEventId:
-		var event mtk.ContractsWithdrawn
+		var event stakeContract.ContractsWithdrawn
 		if err := listener.contractABI.UnpackIntoInterface(&event, withdrawnEventName, l.Data); err != nil {
 			log.Printf("ListenToStakedEvent: Withdrawn failed to unpack event: %v", err)
 			return
@@ -170,7 +170,7 @@ func handleLog(l types.Log, listener EventListener) {
 			event.StakeIndex.String(),
 		)
 
-		stake := model.Stake{
+		stake := stake2.Stake{
 			IndexNum:        event.StakeIndex.String(),
 			Hash:            l.TxHash.Hex(),
 			ContractAddress: listener.contractAddress.Hex(),

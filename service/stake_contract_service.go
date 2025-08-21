@@ -5,20 +5,20 @@ import (
 	"math/big"
 	"net/http"
 	constant "staking-interaction/common"
-	"staking-interaction/model"
+	stakeModel "staking-interaction/model/stake"
 	"staking-interaction/repository"
 )
 
 func Stake(c *gin.Context) {
-	var request model.StakeRequest
-	var response model.Response
+	var request stakeModel.StakeRequest
+	var response stakeModel.Response
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
 
-	contract := model.GetInitContract()
+	contract := stakeModel.GetInitContract()
 	stakingContract := contract.StakingContract
 	auth := contract.Auth
 
@@ -29,7 +29,7 @@ func Stake(c *gin.Context) {
 	)
 
 	if trans == nil || err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "stake transaction error", "error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "stake transaction error", "error": err})
 		return
 	}
 
@@ -42,10 +42,10 @@ func Stake(c *gin.Context) {
 }
 
 func Withdraw(c *gin.Context) {
-	var request model.WithDrawnRequest
-	var response model.Response
+	var request stakeModel.WithDrawnRequest
+	var response stakeModel.Response
 
-	contract := model.GetInitContract()
+	contract := stakeModel.GetInitContract()
 	stakingContract := contract.StakingContract
 	auth := contract.Auth
 
@@ -57,7 +57,7 @@ func Withdraw(c *gin.Context) {
 	trans, err := stakingContract.Withdraw(auth, &request.Index)
 
 	if trans == nil || err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "withdrawn transaction error", "error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "withdrawn transaction error", "error": err})
 		return
 	}
 
@@ -69,7 +69,7 @@ func Withdraw(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"msg": "Withdrawn success!", "data": response})
 }
 
-func StoreStakeInfo(stake model.Stake) {
+func StoreStakeInfo(stake stakeModel.Stake) {
 	repository.AddStakeInfo(stake)
 }
 

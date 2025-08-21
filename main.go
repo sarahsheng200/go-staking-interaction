@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/database"
+	"staking-interaction/model/airdrop"
 	srouter "staking-interaction/router"
 	"staking-interaction/service"
 	"syscall"
@@ -29,20 +30,23 @@ func main() {
 			log.Fatal("Close database failed: ", err)
 		}
 	}()
+
 	router := srouter.InitRouter()
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", PORT),
 		Handler: router,
 	}
 	log.Println(fmt.Sprintf("Listening and serving HTTP on Port: %d, Pid: %d", PORT, os.Getpid()))
+	airdrop.InitNouce()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Error starting server :", err)
 		}
 	}()
-	service.InitStakeContract()
-	service.ListenToEvents()
+	client := service.InitContracts()
+	defer client.Close()
+	//	service.ListenToEvents()
 
 	// 创建系统信号接收器
 	signalChan := make(chan os.Signal)
