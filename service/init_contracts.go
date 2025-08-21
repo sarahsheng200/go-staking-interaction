@@ -12,6 +12,7 @@ import (
 	constant "staking-interaction/common"
 	"staking-interaction/contracts/airdrop"
 	"staking-interaction/contracts/stake"
+	"staking-interaction/model"
 	airdropModel "staking-interaction/model/airdrop"
 	stakeModel "staking-interaction/model/stake"
 )
@@ -49,44 +50,63 @@ func InitContracts() *ethclient.Client {
 		log.Fatalf("Failed to create authorized transactor: %v", err)
 	}
 
-	createStakeContract(auth, fromAddress, ethClient)
-	createAirdropContract(auth, fromAddress, ethClient)
+	model.NewInitClient(model.InitClient{
+		Auth:        auth,
+		Client:      ethClient,
+		FromAddress: fromAddress.String(),
+		PrivateKey:  privateKey,
+		ChainID:     chainID,
+	})
+
+	//createStakeContract(auth, fromAddress, ethClient)
+	//createAirdropContract(auth, fromAddress, ethClient)
 
 	return ethClient
 }
 
-func createStakeContract(auth *bind.TransactOpts, fromAddress common.Address, client *ethclient.Client) {
+func InitStakeContract() {
+	clientInfo := model.GetInitClient()
 	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
 	//绑定合约实例
 	//creates a new instance of Contracts, bound to a specific deployed contract
-	stakingContract, err := stake.NewContracts(contractAddress, client)
+	stakingContract, err := stake.NewContracts(contractAddress, clientInfo.Client)
 	if err != nil {
 		log.Fatalf("Failed to create staking contract: %v", err)
 	}
 
 	stakeModel.NewInitContract(stakeModel.ContractInitInfo{
 		StakingContract: stakingContract,
-		Auth:            auth,
-		FromAddress:     fromAddress.String(),
-		Client:          client,
+		Auth:            clientInfo.Auth,
+		FromAddress:     clientInfo.FromAddress,
+		Client:          clientInfo.Client,
 	})
 
 	fmt.Println("create stake contract successfully!")
 }
 
-func createAirdropContract(auth *bind.TransactOpts, fromAddress common.Address, client *ethclient.Client) {
+func InitAirdropContract() {
+	clientInfo := model.GetInitClient()
 	contractAddress := common.HexToAddress(constant.AIRDROP_CONTRACT_ADDRESS)
-	airdropContract, err := airdrop.NewContracts(contractAddress, client)
+	airdropContract, err := airdrop.NewContracts(contractAddress, clientInfo.Client)
 	if err != nil {
 		log.Fatalf("Failed to create airdrop contract: %v", err)
 	}
 
 	airdropModel.NewInitContract(airdropModel.ContractInitInfo{
 		AirdropContract: airdropContract,
-		Auth:            auth,
-		FromAddress:     fromAddress.String(),
-		Client:          client,
+		Auth:            clientInfo.Auth,
+		FromAddress:     clientInfo.FromAddress,
+		Client:          clientInfo.Client,
 	})
 
 	fmt.Println("create airdrop contract successfully!")
 }
+
+//func InitMtkContract() {
+//	clientInfo := model.GetInitClient()
+//	contractAddr := common.HexToAddress(constant.TOKEN_CONTRACT_ADDRESS)
+//	mtkContract, err := mtk.NewContracts(contractAddr, clientInfo.Client)
+//	if err != nil {
+//		log.Fatalf("Failed to create mtk contract: %v", err)
+//	}
+//}

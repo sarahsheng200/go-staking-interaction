@@ -1,4 +1,4 @@
-package service
+package stake
 
 import (
 	"github.com/gin-gonic/gin"

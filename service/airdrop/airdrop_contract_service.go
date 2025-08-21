@@ -15,28 +15,8 @@ import (
 	"time"
 )
 
-type Wallet struct {
-	PrivateKey string // 私钥（十六进制）
-	Address    string // 以太坊地址（0x前缀）
-}
-
-type Request struct {
-	Count     int      `json:"count"`
-	BatchSize int      `json:"batchSize"`
-	Amount    *big.Int `json:"amount"`
-}
-
-type Response struct {
-	BatchNum        int              `json:"batchNum"`
-	Hash            string           `json:"hash"`
-	ContractAddress string           `json:"contractAddress"`
-	FromAddress     string           `json:"fromAddress"`
-	WalletAddress   []common.Address `json:"walletAddress"`
-	Error           string           `json:"error"`
-}
-
 func GenerateMultiWallets(c *gin.Context) {
-	var request Request
+	var request airdropModel.Request
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(500, gin.H{"msg": "request body invalid", "err": err})
 	}
@@ -49,7 +29,6 @@ func GenerateMultiWallets(c *gin.Context) {
 }
 
 func getMultiWallets(count int) (walletAddresses []common.Address, err error) {
-
 	for i := 0; i < count; i++ {
 		// 1. 生成随机私钥（secp256k1曲线）
 		privateKey, err := crypto.GenerateKey()
@@ -73,8 +52,8 @@ func getMultiWallets(count int) (walletAddresses []common.Address, err error) {
 }
 
 func AirdropERC20(c *gin.Context) {
-	var request Request
-	var responses []Response
+	var request airdropModel.Request
+	var responses []airdropModel.Response
 	var wg sync.WaitGroup
 	var mu sync.Mutex // 保护response切片的并发写入
 	var amounts []*big.Int
@@ -83,31 +62,29 @@ func AirdropERC20(c *gin.Context) {
 		c.AbortWithStatusJSON(500, gin.H{"msg": "request body invalid", "err": err})
 	}
 
-	if request.Count <= 0 || request.BatchSize <= 0 || request.Amount == nil || request.Amount.Cmp(big.NewInt(0)) <= 0 {
+	reqCount := request.Count
+	reqBatchSize := request.BatchSize
+	reqAmount := request.Amount
+
+	if reqCount <= 0 || reqBatchSize <= 0 || reqAmount == nil || reqAmount.Cmp(big.NewInt(0)) <= 0 {
 		c.AbortWithStatusJSON(500, gin.H{"msg": "request params invalid: count, batchSize must be positive and amount must be greater than 0"})
 	}
 
-	count := request.Count
-	batchSize := request.BatchSize
-	if batchSize <= 0 || count <= 0 {
-		c.AbortWithStatusJSON(500, gin.H{"msg": "batch size or count is invalid", "err": "batch size invalid"})
-	}
-
-	walletAddresses, err := getMultiWallets(count)
+	walletAddresses, err := getMultiWallets(reqCount)
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"msg": "generate wallet failed", "err": err})
 	}
 
 	for range walletAddresses {
-		amounts = append(amounts, request.Amount)
+		amounts = append(amounts, reqAmount)
 	}
 
 	ctx, cancel := context.WithTimeout(c, 10*time.Second) // 设置整体超时
 	defer cancel()
 
-	batchNum := len(walletAddresses) / batchSize
+	batchNum := len(walletAddresses) / reqBatchSize
 	startIndex := 0
-	endIndex := batchSize
+	endIndex := reqBatchSize
 	contract := airdropModel.GetInitContract()
 	fromAddr := common.HexToAddress(contract.FromAddress)
 
@@ -131,14 +108,14 @@ func AirdropERC20(c *gin.Context) {
 		wg.Add(1)
 		go func(idx int, addrs []common.Address, amts []*big.Int, auth *bind.TransactOpts) {
 			defer wg.Done()
-			res := processAirdrop(idx, addrs, amts, contract, auth)
+			res := processAirdropERC20(idx, addrs, amts, contract, auth)
 			// 线程安全地收集结果
 			mu.Lock()
 			responses = append(responses, res)
 			mu.Unlock()
 		}(i, batchAddress, batchAmounts, &batchAuth)
 		startIndex = endIndex
-		endIndex = startIndex + batchSize
+		endIndex = startIndex + reqBatchSize
 		if endIndex > len(walletAddresses) {
 			endIndex = len(walletAddresses)
 		}
@@ -166,12 +143,12 @@ func AirdropERC20(c *gin.Context) {
 
 }
 
-func processAirdrop(idx int, batchAddress []common.Address, batchAmounts []*big.Int, contract airdropModel.ContractInitInfo, auth *bind.TransactOpts) (response Response) {
+func processAirdropERC20(idx int, batchAddress []common.Address, batchAmounts []*big.Int, contract airdropModel.ContractInitInfo, auth *bind.TransactOpts) (response airdropModel.Response) {
 	airdropContract := contract.AirdropContract
 	trans, err := airdropContract.AirdropERC20(auth, batchAddress, batchAmounts)
 
 	if trans == nil || err != nil {
-		return Response{
+		return airdropModel.Response{
 			BatchNum:        idx,
 			Error:           fmt.Sprintf("airdrop failed: ", err),
 			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
@@ -179,7 +156,7 @@ func processAirdrop(idx int, batchAddress []common.Address, batchAmounts []*big.
 			WalletAddress:   batchAddress,
 		}
 	} else {
-		return Response{
+		return airdropModel.Response{
 			BatchNum:        idx,
 			Hash:            trans.Hash().Hex(),
 			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,

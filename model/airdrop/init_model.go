@@ -10,7 +10,6 @@ import (
 var (
 	contractInfo ContractInitInfo
 	dataMutex    sync.RWMutex
-	nouce        int64
 )
 
 type ContractInitInfo struct {
@@ -34,12 +33,4 @@ func NewInitContract(c ContractInitInfo) {
 		FromAddress:     c.FromAddress,
 		Client:          c.Client,
 	}
-}
-
-func GetNouce() int64 {
-	return nouce + 1
-}
-
-func InitNouce() {
-	nouce = 0
 }

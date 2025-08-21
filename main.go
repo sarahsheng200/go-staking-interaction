@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/database"
-	"staking-interaction/model/airdrop"
 	srouter "staking-interaction/router"
 	"staking-interaction/service"
 	"syscall"
@@ -37,7 +36,6 @@ func main() {
 		Handler: router,
 	}
 	log.Println(fmt.Sprintf("Listening and serving HTTP on Port: %d, Pid: %d", PORT, os.Getpid()))
-	airdrop.InitNouce()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -46,7 +44,9 @@ func main() {
 	}()
 	client := service.InitContracts()
 	defer client.Close()
-	//	service.ListenToEvents()
+	service.InitStakeContract()
+	service.InitAirdropContract()
+	//stakeService.ListenToEvents()
 
 	// 创建系统信号接收器
 	signalChan := make(chan os.Signal)
@@ -54,7 +54,7 @@ func main() {
 	<-signalChan
 	log.Println("shutdown server...")
 
-	service.CloseListener()
+	//stakeService.CloseListener()
 	log.Println("stake event listener closed")
 
 	// 创建5s的超时上下文

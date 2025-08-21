@@ -3,8 +3,9 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"log"
-	"staking-interaction/service"
 	airdropService "staking-interaction/service/airdrop"
+	stakeService "staking-interaction/service/stake"
+	"staking-interaction/service/transaction"
 )
 
 func InitRouter() *gin.Engine {
@@ -17,15 +18,21 @@ func InitRouter() *gin.Engine {
 
 	staking := group.Group("/staking")
 	{
-		staking.POST("/stake", service.Stake)
-		staking.POST("/withdraw", service.Withdraw)
-		staking.GET("stake/:address", service.GetAllStakesByFromAddress)
+		staking.POST("/stake", stakeService.Stake)
+		staking.POST("/withdraw", stakeService.Withdraw)
+		staking.GET("stake/:address", stakeService.GetAllStakesByFromAddress)
 	}
 
 	airdrop := group.Group("/airdropping")
 	{
 		airdrop.POST("/airdroperc20", airdropService.AirdropERC20)
 		airdrop.POST("/generateWallet", airdropService.GenerateMultiWallets)
+	}
+
+	transfer := group.Group("/transfer")
+	{
+		transfer.POST("/transferERC20", transaction.SendErc20)
+		transfer.POST("/transferBNB", transaction.SendBNB)
 	}
 
 	return router
