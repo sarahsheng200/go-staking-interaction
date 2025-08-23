@@ -9,14 +9,15 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"math/big"
+	"net/http"
 	constant "staking-interaction/common"
-	airdropModel "staking-interaction/model/airdrop"
+	model "staking-interaction/model/airdrop"
 	"sync"
 	"time"
 )
 
 func GenerateMultiWallets(c *gin.Context) {
-	var request airdropModel.Request
+	var request model.Request
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(500, gin.H{"msg": "request body invalid", "err": err})
 	}
@@ -52,11 +53,13 @@ func getMultiWallets(count int) (walletAddresses []common.Address, err error) {
 }
 
 func AirdropERC20(c *gin.Context) {
-	var request airdropModel.Request
-	var responses []airdropModel.Response
-	var wg sync.WaitGroup
-	var mu sync.Mutex // 保护response切片的并发写入
-	var amounts []*big.Int
+	var (
+		request   model.Request
+		responses []model.Response
+		wg        sync.WaitGroup
+		mu        sync.Mutex // 保护response切片的并发写入
+		amounts   []*big.Int
+	)
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"msg": "request body invalid", "err": err})
@@ -66,60 +69,71 @@ func AirdropERC20(c *gin.Context) {
 	reqBatchSize := request.BatchSize
 	reqAmount := request.Amount
 
-	if reqCount <= 0 || reqBatchSize <= 0 || reqAmount == nil || reqAmount.Cmp(big.NewInt(0)) <= 0 {
-		c.AbortWithStatusJSON(500, gin.H{"msg": "request params invalid: count, batchSize must be positive and amount must be greater than 0"})
+	if request.Count <= 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "count 必须大于 0"})
+		return
+	}
+	if request.BatchSize <= 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "batchSize 必须大于 0"})
+		return
+	}
+	if request.Amount == nil || request.Amount.Cmp(big.NewInt(0)) <= 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "amount 必须大于 0"})
+		return
 	}
 
+	// generate multiple wallets
 	walletAddresses, err := getMultiWallets(reqCount)
-	if err != nil {
+	if err != nil || walletAddresses == nil || len(walletAddresses) == 0 {
 		c.AbortWithStatusJSON(500, gin.H{"msg": "generate wallet failed", "err": err})
+		return
 	}
-
+	// generate related accounts
 	for range walletAddresses {
 		amounts = append(amounts, reqAmount)
 	}
+	addressLen := len(walletAddresses)
+	contract := model.GetInitContract()
+	fromAddr := common.HexToAddress(contract.FromAddress)
 
 	ctx, cancel := context.WithTimeout(c, 10*time.Second) // 设置整体超时
 	defer cancel()
 
-	batchNum := len(walletAddresses) / reqBatchSize
-	startIndex := 0
-	endIndex := reqBatchSize
-	contract := airdropModel.GetInitContract()
-	fromAddr := common.HexToAddress(contract.FromAddress)
-
 	initialNonce, err := contract.Client.PendingNonceAt(ctx, fromAddr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "获取 nonce 失败", "err": err.Error()})
+		return
+	}
 
-	for i := 0; i < batchNum+1 && startIndex <= endIndex; i++ {
-		var batchAddress []common.Address
-		var batchAmounts []*big.Int
-		if startIndex < endIndex {
-			batchAddress = walletAddresses[startIndex:endIndex]
-			batchAmounts = amounts[startIndex:endIndex]
-		} else {
-			batchAddress = walletAddresses[startIndex-1 : endIndex]
-			batchAmounts = amounts[startIndex-1 : endIndex]
+	batchNum := (addressLen + reqBatchSize - 1) / reqBatchSize
+	startIndex := 0
+	currentNonce := initialNonce
+	for i := 0; i < batchNum && startIndex < addressLen; i++ {
+		endIndex := startIndex + reqBatchSize
+		if endIndex > addressLen {
+			endIndex = addressLen
 		}
 
-		batchAuth := *contract.Auth
-		batchNonce := initialNonce + uint64(i)
-		batchAuth.Nonce = big.NewInt(int64(batchNonce))
+		batchAddress := walletAddresses[startIndex:endIndex]
+		batchAmounts := amounts[startIndex:endIndex]
+		batchNonce := currentNonce
+		currentNonce++
 
 		wg.Add(1)
-		go func(idx int, addrs []common.Address, amts []*big.Int, auth *bind.TransactOpts) {
+		go func(idx int, addrs []common.Address, amts []*big.Int, nonce uint64) {
 			defer wg.Done()
-			res := processAirdropERC20(idx, addrs, amts, contract, auth)
+			batchAuth := *contract.Auth
+			batchAuth.Nonce = big.NewInt(int64(nonce))
+			batchAuth.Context = ctx
+
+			res := processAirdropERC20(idx, addrs, amts, contract, &batchAuth)
 			// 线程安全地收集结果
 			mu.Lock()
 			responses = append(responses, res)
 			mu.Unlock()
-		}(i, batchAddress, batchAmounts, &batchAuth)
-		startIndex = endIndex
-		endIndex = startIndex + reqBatchSize
-		if endIndex > len(walletAddresses) {
-			endIndex = len(walletAddresses)
-		}
+		}(i, batchAddress, batchAmounts, batchNonce)
 
+		startIndex = endIndex
 	}
 
 	done := make(chan struct{})
@@ -132,36 +146,52 @@ func AirdropERC20(c *gin.Context) {
 	// 等待结果或超时
 	select {
 	case <-done:
-		c.JSON(200, gin.H{"msg": "success", "data": responses})
+		successCount := 0
+		failedCount := 0
+		for _, res := range responses {
+			if res.Error == "" {
+				successCount++
+			} else {
+				failedCount++
+			}
+		}
+		c.JSON(200, gin.H{
+			"msg":              "airdrop success!",
+			"completedBatches": len(responses),
+			"successBatches":   successCount,
+			"failBatches":      failedCount,
+			"data":             responses,
+		})
 	case <-ctx.Done():
-		c.JSON(504, gin.H{"msg": "airdrop timeout", "err": ctx.Err().Error()})
-		return
-	case <-time.After(10 * time.Second):
-		c.JSON(504, gin.H{"msg": "response timeout"})
-		return
+		c.JSON(504, gin.H{
+			"msg":              "airdrop timeout",
+			"completedBatches": len(responses),
+			"err":              ctx.Err().Error(),
+			"data":             responses,
+		})
 	}
 
 }
 
-func processAirdropERC20(idx int, batchAddress []common.Address, batchAmounts []*big.Int, contract airdropModel.ContractInitInfo, auth *bind.TransactOpts) (response airdropModel.Response) {
+func processAirdropERC20(idx int, batchAddress []common.Address, batchAmounts []*big.Int, contract model.ContractInitInfo, auth *bind.TransactOpts) (response model.Response) {
 	airdropContract := contract.AirdropContract
 	trans, err := airdropContract.AirdropERC20(auth, batchAddress, batchAmounts)
-
 	if trans == nil || err != nil {
-		return airdropModel.Response{
+		return model.Response{
 			BatchNum:        idx,
-			Error:           fmt.Sprintf("airdrop failed: ", err),
+			Error:           fmt.Sprintf("airdrop failed: %v", err),
 			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
 			FromAddress:     contract.FromAddress,
 			WalletAddress:   batchAddress,
 		}
 	} else {
-		return airdropModel.Response{
+		return model.Response{
 			BatchNum:        idx,
 			Hash:            trans.Hash().Hex(),
 			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
 			FromAddress:     contract.FromAddress,
 			WalletAddress:   batchAddress,
+			Error:           "",
 		}
 	}
 

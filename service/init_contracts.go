@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	constant "staking-interaction/common"
-	"staking-interaction/contracts/airdrop"
-	"staking-interaction/contracts/stake"
+	airContract "staking-interaction/contracts/airdrop"
+	stakeContract "staking-interaction/contracts/stake"
 	"staking-interaction/model"
 	airdropModel "staking-interaction/model/airdrop"
 	stakeModel "staking-interaction/model/stake"
@@ -58,9 +58,6 @@ func InitContracts() *ethclient.Client {
 		ChainID:     chainID,
 	})
 
-	//createStakeContract(auth, fromAddress, ethClient)
-	//createAirdropContract(auth, fromAddress, ethClient)
-
 	return ethClient
 }
 
@@ -69,7 +66,7 @@ func InitStakeContract() {
 	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
 	//绑定合约实例
 	//creates a new instance of Contracts, bound to a specific deployed contract
-	stakingContract, err := stake.NewContracts(contractAddress, clientInfo.Client)
+	stakingContract, err := stakeContract.NewContracts(contractAddress, clientInfo.Client)
 	if err != nil {
 		log.Fatalf("Failed to create staking contract: %v", err)
 	}
@@ -87,7 +84,7 @@ func InitStakeContract() {
 func InitAirdropContract() {
 	clientInfo := model.GetInitClient()
 	contractAddress := common.HexToAddress(constant.AIRDROP_CONTRACT_ADDRESS)
-	airdropContract, err := airdrop.NewContracts(contractAddress, clientInfo.Client)
+	airdropContract, err := airContract.NewContracts(contractAddress, clientInfo.Client)
 	if err != nil {
 		log.Fatalf("Failed to create airdrop contract: %v", err)
 	}

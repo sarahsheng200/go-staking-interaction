@@ -3,7 +3,7 @@ package airdrop
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"staking-interaction/contracts/airdrop"
+	contract "staking-interaction/contracts/airdrop"
 	"sync"
 )
 
@@ -13,7 +13,7 @@ var (
 )
 
 type ContractInitInfo struct {
-	AirdropContract *airdrop.Contracts
+	AirdropContract *contract.Contracts
 	Auth            *bind.TransactOpts
 	FromAddress     string
 	Client          *ethclient.Client

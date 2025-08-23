@@ -40,8 +40,6 @@ func SendErc20(c *gin.Context) {
 	}
 	toAddress := common.HexToAddress(req.ToAddress)
 	amount := req.Amount
-	//ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	//defer cancel()
 
 	clientInfo := model.GetInitClient()
 	auth := clientInfo.Auth
@@ -54,7 +52,6 @@ func SendErc20(c *gin.Context) {
 		return
 	}
 	tx, err := mtkContract.Transfer(auth, toAddress, amount)
-	fmt.Println("tx---", tx)
 	if tx == nil || err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "transfer failed", "error": err})
 		return
