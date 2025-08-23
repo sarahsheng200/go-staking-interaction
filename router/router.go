@@ -26,6 +26,7 @@ func InitRouter() *gin.Engine {
 	airdrop := group.Group("/airdropping")
 	{
 		airdrop.POST("/airdroperc20", airdropService.AirdropERC20)
+		airdrop.POST("/airdropbnb", airdropService.AirdropBNB)
 		airdrop.POST("/generateWallet", airdropService.GenerateMultiWallets)
 	}
 
