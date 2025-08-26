@@ -12,9 +12,6 @@ import (
 	constant "staking-interaction/common"
 	airContract "staking-interaction/contracts/airdrop"
 	stakeContract "staking-interaction/contracts/stake"
-	"staking-interaction/model"
-	airdropModel "staking-interaction/model/airdrop"
-	stakeModel "staking-interaction/model/stake"
 )
 
 func InitContracts() *ethclient.Client {
@@ -50,7 +47,7 @@ func InitContracts() *ethclient.Client {
 		log.Fatalf("Failed to create authorized transactor: %v", err)
 	}
 
-	model.NewInitClient(model.InitClient{
+	NewInitClient(InitClient{
 		Auth:        auth,
 		Client:      ethClient,
 		FromAddress: fromAddress.String(),
@@ -62,7 +59,7 @@ func InitContracts() *ethclient.Client {
 }
 
 func InitStakeContract() {
-	clientInfo := model.GetInitClient()
+	clientInfo := GetInitClient()
 	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
 	//绑定合约实例
 	//creates a new instance of Contracts, bound to a specific deployed contract
@@ -71,7 +68,7 @@ func InitStakeContract() {
 		log.Fatalf("Failed to create staking contract: %v", err)
 	}
 
-	stakeModel.NewInitContract(stakeModel.ContractInitInfo{
+	NewStakeContract(ContractStakeInfo{
 		StakingContract: stakingContract,
 		Auth:            clientInfo.Auth,
 		FromAddress:     clientInfo.FromAddress,
@@ -82,14 +79,14 @@ func InitStakeContract() {
 }
 
 func InitAirdropContract() {
-	clientInfo := model.GetInitClient()
+	clientInfo := GetInitClient()
 	contractAddress := common.HexToAddress(constant.AIRDROP_CONTRACT_ADDRESS)
 	airdropContract, err := airContract.NewContracts(contractAddress, clientInfo.Client)
 	if err != nil {
 		log.Fatalf("Failed to create airdrop contract: %v", err)
 	}
 
-	airdropModel.NewInitContract(airdropModel.ContractInitInfo{
+	NewAirdropContract(AirdropContractInfo{
 		AirdropContract: airdropContract,
 		Auth:            clientInfo.Auth,
 		FromAddress:     clientInfo.FromAddress,
@@ -98,12 +95,3 @@ func InitAirdropContract() {
 
 	fmt.Println("create airdrop contract successfully!")
 }
-
-//func InitMtkContract() {
-//	clientInfo := model.GetInitClient()
-//	contractAddr := common.HexToAddress(constant.TOKEN_CONTRACT_ADDRESS)
-//	mtkContract, err := mtk.NewContracts(contractAddr, clientInfo.Client)
-//	if err != nil {
-//		log.Fatalf("Failed to create mtk contract: %v", err)
-//	}
-//}

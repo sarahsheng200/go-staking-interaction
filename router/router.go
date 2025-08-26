@@ -3,9 +3,7 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"log"
-	airdropService "staking-interaction/service/airdrop"
-	stakeService "staking-interaction/service/stake"
-	"staking-interaction/service/transaction"
+	"staking-interaction/controller"
 )
 
 func InitRouter() *gin.Engine {
@@ -18,22 +16,22 @@ func InitRouter() *gin.Engine {
 
 	staking := group.Group("/staking")
 	{
-		staking.POST("/stake", stakeService.Stake)
-		staking.POST("/withdraw", stakeService.Withdraw)
-		staking.GET("stake/:address", stakeService.GetAllStakesByFromAddress)
+		staking.POST("/stake", controller.Stake)
+		staking.POST("/withdraw", controller.Withdraw)
+		staking.GET("stake/:address", controller.GetAllStakesByFromAddress)
 	}
 
 	airdrop := group.Group("/airdropping")
 	{
-		airdrop.POST("/airdroperc20", airdropService.AirdropERC20)
-		airdrop.POST("/airdropbnb", airdropService.AirdropBNB)
-		airdrop.POST("/generateWallet", airdropService.GenerateMultiWallets)
+		airdrop.POST("/airdroperc20", controller.AirdropERC20)
+		airdrop.POST("/airdropbnb", controller.AirdropBNB)
+		airdrop.POST("/generateWallet", controller.GenerateMultiWallets)
 	}
 
 	transfer := group.Group("/transfer")
 	{
-		transfer.POST("/transferERC20", transaction.SendErc20)
-		transfer.POST("/transferBNB", transaction.SendBNB)
+		transfer.POST("/transferERC20", controller.SendErc20)
+		transfer.POST("/transferBNB", controller.SendBNB)
 	}
 
 	return router

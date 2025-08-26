@@ -1,4 +1,4 @@
-package airdrop
+package dto
 
 import (
 	"github.com/ethereum/go-ethereum/common"
@@ -10,17 +10,26 @@ type Wallet struct {
 	Address    string // 以太坊地址（0x前缀）
 }
 
-type Request struct {
+type AirdropRequest struct {
 	Count     int      `json:"count"`
 	BatchSize int      `json:"batchSize"`
 	Amount    *big.Int `json:"amount"`
 }
 
-type Response struct {
+type AirdropInfo struct {
 	BatchNum        int              `json:"batchNum"`
 	Hash            string           `json:"hash"`
 	ContractAddress string           `json:"contractAddress"`
 	FromAddress     string           `json:"fromAddress"`
 	WalletAddress   []common.Address `json:"walletAddress"`
 	Error           string           `json:"error"`
+}
+
+type AirdropResponse struct {
+	Msg              string        `json:"msg"`
+	CompletedBatches int           `json:"completedBatches"`
+	SuccessBatches   int           `json:"successBatches"`
+	FailBatches      int           `json:"failBatches"`
+	Data             []AirdropInfo `json:"data"`
+	Error            string        `json:"error"`
 }

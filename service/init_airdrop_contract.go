@@ -1,4 +1,4 @@
-package airdrop
+package service
 
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -8,26 +8,26 @@ import (
 )
 
 var (
-	contractInfo ContractInitInfo
-	dataMutex    sync.RWMutex
+	contractAirdropInfo AirdropContractInfo
+	dataAirdropMutex    sync.RWMutex
 )
 
-type ContractInitInfo struct {
+type AirdropContractInfo struct {
 	AirdropContract *contract.Contracts
 	Auth            *bind.TransactOpts
 	FromAddress     string
 	Client          *ethclient.Client
 }
 
-func GetInitContract() ContractInitInfo {
-	return contractInfo
+func GetAirdropContract() AirdropContractInfo {
+	return contractAirdropInfo
 }
 
-func NewInitContract(c ContractInitInfo) {
-	dataMutex.Lock()
-	defer dataMutex.Unlock()
+func NewAirdropContract(c AirdropContractInfo) {
+	dataAirdropMutex.Lock()
+	defer dataAirdropMutex.Unlock()
 
-	contractInfo = ContractInitInfo{
+	contractAirdropInfo = AirdropContractInfo{
 		AirdropContract: c.AirdropContract,
 		Auth:            c.Auth,
 		FromAddress:     c.FromAddress,

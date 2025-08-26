@@ -1,4 +1,4 @@
-package stake
+package service
 
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -8,26 +8,26 @@ import (
 )
 
 var (
-	contractInfo ContractInitInfo
-	dataMutex    sync.RWMutex
+	contractStakeInfo ContractStakeInfo
+	dataStakeMutex    sync.RWMutex
 )
 
-type ContractInitInfo struct {
+type ContractStakeInfo struct {
 	StakingContract *stake.Contracts
 	Auth            *bind.TransactOpts
 	FromAddress     string
 	Client          *ethclient.Client
 }
 
-func GetInitContract() ContractInitInfo {
-	return contractInfo
+func GetStakeContract() ContractStakeInfo {
+	return contractStakeInfo
 }
 
-func NewInitContract(c ContractInitInfo) {
-	dataMutex.Lock()
-	defer dataMutex.Unlock()
+func NewStakeContract(c ContractStakeInfo) {
+	dataStakeMutex.Lock()
+	defer dataStakeMutex.Unlock()
 
-	contractInfo = ContractInitInfo{
+	contractStakeInfo = ContractStakeInfo{
 		StakingContract: c.StakingContract,
 		Auth:            c.Auth,
 		FromAddress:     c.FromAddress,

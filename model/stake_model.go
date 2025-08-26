@@ -1,24 +1,8 @@
-package stake
+package model
 
 import (
-	"math/big"
 	"time"
 )
-
-type Response struct {
-	Hash            string `json:"hash"`
-	ContractAddress string `json:"contractAddress"`
-	FromAddress     string `json:"fromAddress"`
-	Method          string `json:"method"`
-}
-type StakeRequest struct {
-	Amount int64 `json:"amount"`
-	Period uint8 `json:"period"`
-}
-
-type WithDrawnRequest struct {
-	Index big.Int `json:"index"`
-}
 
 // Stake 质押记录表对应的结构体
 type Stake struct {

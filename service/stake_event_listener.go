@@ -1,4 +1,4 @@
-package stake
+package service
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"math/big"
 	constant "staking-interaction/common"
 	stakeContract "staking-interaction/contracts/stake"
-	stake2 "staking-interaction/model/stake"
+	"staking-interaction/model"
 	"strings"
 	"time"
 )
@@ -134,7 +134,7 @@ func handleLog(l types.Log, listener EventListener) {
 			event.StakeIndex.String(),
 		)
 
-		stake := stake2.Stake{
+		stake := model.Stake{
 			IndexNum:        event.StakeIndex.String(),
 			Hash:            l.TxHash.Hex(),
 			ContractAddress: listener.contractAddress.Hex(),
@@ -170,7 +170,7 @@ func handleLog(l types.Log, listener EventListener) {
 			event.StakeIndex.String(),
 		)
 
-		stake := stake2.Stake{
+		stake := model.Stake{
 			IndexNum:        event.StakeIndex.String(),
 			Hash:            l.TxHash.Hex(),
 			ContractAddress: listener.contractAddress.Hex(),
