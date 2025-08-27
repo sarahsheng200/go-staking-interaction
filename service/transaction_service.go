@@ -12,6 +12,7 @@ import (
 	"staking-interaction/adapter"
 	constant "staking-interaction/common"
 	"staking-interaction/contracts/mtk"
+	"staking-interaction/dto"
 	"time"
 )
 
@@ -27,17 +28,7 @@ func NewTransactionService(
 	}
 }
 
-type ERCRequest struct {
-	ToAddress string   `json:"toAddress"`
-	Amount    *big.Int `json:"amount"`
-}
-type ERCRes struct {
-	Hash    string `json:"hash"`
-	Symbol  string `json:"symbol"`
-	Decimal uint8  `json:"decimal"`
-}
-
-func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *ERCRes, err error) {
+func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *dto.ERCRes, err error) {
 	// 方案一：普通交易，与合约没关系，需要转账之后，等待交易是成功还是失败,
 	// tx.wait();
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
@@ -58,12 +49,12 @@ func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *ERCRe
 	}
 	sym, _ := mtkContract.Symbol(&bind.CallOpts{})
 	decimal, _ := mtkContract.Decimals(&bind.CallOpts{})
-	res = &ERCRes{Hash: tx.Hash().Hex(), Symbol: sym, Decimal: decimal}
+	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: sym, Decimal: decimal}
 
 	return res, nil
 }
 
-func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *ERCRes, err error) {
+func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *dto.ERCRes, err error) {
 	// 方案一：普通交易，与合约没关系，需要转账之后，等待交易是成功还是失败,
 	// tx.wait();
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
@@ -103,7 +94,7 @@ func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *ERCRes,
 	if receipt == nil || receipt.Status != types.ReceiptStatusSuccessful {
 		return nil, fmt.Errorf("check transaction failed: %v", err)
 	}
-	res = &ERCRes{Hash: tx.Hash().Hex(), Symbol: "BNB"}
+	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: "BNB"}
 	return res, nil
 	//receipt-------
 	//{
