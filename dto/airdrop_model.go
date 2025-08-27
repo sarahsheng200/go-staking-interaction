@@ -20,7 +20,7 @@ type AirdropInfo struct {
 	BatchNum        int              `json:"batchNum"`
 	Hash            string           `json:"hash"`
 	ContractAddress string           `json:"contractAddress"`
-	FromAddress     string           `json:"fromAddress"`
+	FromAddress     common.Address   `json:"fromAddress"`
 	WalletAddress   []common.Address `json:"walletAddress"`
 	Error           string           `json:"error"`
 }

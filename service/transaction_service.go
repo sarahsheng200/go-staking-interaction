@@ -9,10 +9,23 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
+	"staking-interaction/adapter"
 	constant "staking-interaction/common"
 	"staking-interaction/contracts/mtk"
 	"time"
 )
+
+type TransactionService struct {
+	contract *adapter.TransactionContractInfo
+}
+
+func NewTransactionService(
+	contract *adapter.TransactionContractInfo,
+) *TransactionService {
+	return &TransactionService{
+		contract: contract,
+	}
+}
 
 type ERCRequest struct {
 	ToAddress string   `json:"toAddress"`
@@ -24,22 +37,21 @@ type ERCRes struct {
 	Decimal uint8  `json:"decimal"`
 }
 
-func SendErc20(addr string, amount *big.Int) (res *ERCRes, err error) {
+func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *ERCRes, err error) {
 	// 方案一：普通交易，与合约没关系，需要转账之后，等待交易是成功还是失败,
 	// tx.wait();
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
 	// 2. 通过hash查询交易是否成功
 	// 创建转账交易
-	clientInfo := GetInitClient()
-	auth := clientInfo.Auth
-	ethClient := clientInfo.Client
+	auth := s.contract.Auth
+	ethClient := s.contract.Client
 	toAddress := common.HexToAddress(addr)
-
 	contractAddr := common.HexToAddress(constant.TOKEN_CONTRACT_ADDRESS)
 	mtkContract, err := mtk.NewContracts(contractAddr, ethClient)
 	if err != nil {
 		return nil, fmt.Errorf("contract create failed: %v", err)
 	}
+
 	tx, err := mtkContract.Transfer(auth, toAddress, amount)
 	if tx == nil || err != nil {
 		return nil, fmt.Errorf("transfer failed: %v", err)
@@ -51,14 +63,13 @@ func SendErc20(addr string, amount *big.Int) (res *ERCRes, err error) {
 	return res, nil
 }
 
-func SendBNB(addr string, amount *big.Int) (res *ERCRes, err error) {
+func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *ERCRes, err error) {
 	// 方案一：普通交易，与合约没关系，需要转账之后，等待交易是成功还是失败,
 	// tx.wait();
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
 	// 2. 通过hash查询交易是否成功
-	clientInfo := GetInitClient()
-	ethClient := clientInfo.Client
-	fromAddress := common.HexToAddress(clientInfo.FromAddress)
+	ethClient := s.contract.Client
+	fromAddress := s.contract.FromAddress
 	toAddress := common.HexToAddress(addr)
 	// 1. 准备交易参数
 	// 1.1 动态获取nonce
@@ -80,7 +91,7 @@ func SendBNB(addr string, amount *big.Int) (res *ERCRes, err error) {
 		Data:     nil, // 无数据
 	})
 	// 3. 签名交易（使用BSC链ID）
-	signedTx, err := types.SignTx(tx, types.NewLondonSigner(clientInfo.ChainID), clientInfo.PrivateKey)
+	signedTx, err := types.SignTx(tx, types.NewLondonSigner(s.contract.ChainID), s.contract.PrivateKey)
 	if signedTx == nil || err != nil {
 		return nil, fmt.Errorf("signed Tx failed: %v", err)
 	}

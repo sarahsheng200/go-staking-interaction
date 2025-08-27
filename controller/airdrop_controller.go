@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"math/big"
 	"net/http"
+	"staking-interaction/adapter"
 	"staking-interaction/dto"
 	"staking-interaction/service"
 )
@@ -45,13 +47,19 @@ func AirdropERC20(c *gin.Context) {
 		return
 	}
 
-	responses, err := service.AirdropERC20(reqCount, reqBatchSize, reqAmount)
+	contract, err := adapter.NewAirdropContract()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		return
+	}
+	fmt.Println("Airdrop contract GetFromAddress--", contract.GetFromAddress())
+	airdropService := service.NewAirdropService(contract)
+	responses, err := airdropService.AirdropERC20(reqCount, reqBatchSize, reqAmount)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "Airdrop failed", "err": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, responses)
-
 }
 
 func AirdropBNB(c *gin.Context) {
@@ -80,7 +88,13 @@ func AirdropBNB(c *gin.Context) {
 		return
 	}
 
-	responses, err := service.AirdropBNB(reqCount, reqBatchSize, reqAmount)
+	contract, err := adapter.NewAirdropContract()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		return
+	}
+	airdropService := service.NewAirdropService(contract)
+	responses, err := airdropService.AirdropBNB(reqCount, reqBatchSize, reqAmount)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "Airdrop failed", "err": err})
 		return

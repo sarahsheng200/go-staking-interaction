@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"math/big"
 	"net/http"
+	"staking-interaction/adapter"
 	"staking-interaction/service"
 )
 
@@ -28,8 +29,13 @@ func SendErc20(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	res, err := service.SendErc20(req.ToAddress, req.Amount)
+	contract, err := adapter.NewTransactionContract()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		return
+	}
+	transactionService := service.NewTransactionService(contract)
+	res, err := transactionService.SendErc20(req.ToAddress, req.Amount)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "Airdrop failed", "err": err})
 		return
@@ -48,8 +54,13 @@ func SendBNB(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	res, err := service.SendBNB(req.ToAddress, req.Amount)
+	contract, err := adapter.NewTransactionContract()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		return
+	}
+	transactionService := service.NewTransactionService(contract)
+	res, err := transactionService.SendBNB(req.ToAddress, req.Amount)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "Airdrop failed", "err": err})
 		return

@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"staking-interaction/adapter"
 	"staking-interaction/dto"
 	"staking-interaction/service"
 )
@@ -13,7 +14,13 @@ func Stake(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
-	response, err := service.Stake(request.Amount, request.Period)
+	contract, err := adapter.NewStakeContract()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		return
+	}
+	stakeService := service.NewStakeService(contract)
+	response, err := stakeService.Stake(request.Amount, request.Period)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "stake transaction error", "error": err})
 	}
@@ -28,7 +35,13 @@ func Withdraw(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
-	response, err := service.Withdraw(request.Index)
+	contract, err := adapter.NewStakeContract()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		return
+	}
+	stakeService := service.NewStakeService(contract)
+	response, err := stakeService.Withdraw(request.Index)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "withdrawn transaction error", "error": err})
 		return

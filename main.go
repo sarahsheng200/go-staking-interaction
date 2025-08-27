@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"staking-interaction/adapter"
 	"staking-interaction/database"
 	srouter "staking-interaction/router"
-	"staking-interaction/service"
 	"syscall"
 	"time"
 )
@@ -42,10 +42,13 @@ func main() {
 			log.Fatal("Error starting server :", err)
 		}
 	}()
-	client := service.InitContracts()
-	defer client.Close()
-	service.InitStakeContract()
-	service.InitAirdropContract()
+	clientInfo, err := adapter.NewInitClient()
+	if err != nil {
+		log.Fatal("Init client failed: ", err)
+	}
+	defer clientInfo.CloseInitClient()
+	//service.InitStakeContract()
+	//service.InitAirdropContract()
 	//stakeService.ListenToEvents()
 
 	// 创建系统信号接收器
