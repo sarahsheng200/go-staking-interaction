@@ -10,20 +10,284 @@ import (
 	"math/big"
 	"staking-interaction/adapter"
 	constant "staking-interaction/common"
+	"staking-interaction/contracts/airdrop"
 	"staking-interaction/dto"
+	"staking-interaction/utils"
 	"sync"
 	"time"
 )
 
 type AirdropService struct {
-	contractInfo *adapter.AirdropContractInfo
+	clientInfo *adapter.InitClient
 }
 
 func NewAirdropService(
-	contractInfo *adapter.AirdropContractInfo,
+	clientInfo *adapter.InitClient,
 ) *AirdropService {
 	return &AirdropService{
-		contractInfo: contractInfo,
+		clientInfo: clientInfo,
+	}
+}
+
+func (s *AirdropService) NewAirdropContract() (*airdrop.Contracts, error) {
+	contractAddress := common.HexToAddress(constant.AIRDROP_CONTRACT_ADDRESS)
+	airdropContract, err := airdrop.NewContracts(contractAddress, s.clientInfo.Client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create airdroperc contract")
+	}
+
+	if airdropContract == nil {
+		return nil, fmt.Errorf("airdropContract should not be nil")
+	}
+	return airdropContract, nil
+}
+
+func (s *AirdropService) AirdropERC20(reqCount int, reqBatchSize int, reqAmount []*big.Int) (data *dto.AirdropResponse, err error) {
+	var (
+		wg        sync.WaitGroup
+		mu        sync.Mutex // 保护response切片的并发写入
+		responses []dto.AirdropInfo
+	)
+	fmt.Println("Airdrop contract init---", s.clientInfo.FromAddress)
+	contract, err := s.NewAirdropContract()
+	if err != nil {
+		return nil, fmt.Errorf("new contract failed: %v", err)
+	}
+
+	// generate multiple wallets
+	walletAddresses, err := GetMultiWallets(reqCount)
+	if err != nil || walletAddresses == nil || len(walletAddresses) == 0 {
+		return nil, fmt.Errorf("generate wallet failed: %v", err)
+	}
+
+	addressLen := len(walletAddresses)
+	fromAddr := s.clientInfo.FromAddress
+	ethClient := s.clientInfo.Client
+	auth := s.clientInfo.Auth
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // 设置整体超时
+	defer cancel()
+
+	initialNonce, err := ethClient.PendingNonceAt(ctx, fromAddr)
+	if err != nil {
+		return nil, fmt.Errorf("retrieve nonce failed: %v", err)
+	}
+
+	batchNum := (addressLen + reqBatchSize - 1) / reqBatchSize
+	startIndex := 0
+	currentNonce := initialNonce
+	for i := 0; i < batchNum && startIndex < addressLen; i++ {
+		endIndex := startIndex + reqBatchSize
+		if endIndex > addressLen {
+			endIndex = addressLen
+		}
+
+		batchAddress := walletAddresses[startIndex:endIndex]
+		batchAmounts := reqAmount[startIndex:endIndex]
+		batchNonce := currentNonce
+		currentNonce++
+
+		wg.Add(1)
+		go func(idx int, addresses []common.Address, amounts []*big.Int, nonce uint64) {
+			defer wg.Done()
+			batchAuth := *auth
+			batchAuth.Nonce = big.NewInt(int64(nonce))
+			batchAuth.Context = ctx
+
+			res := s.processAirdropERC20(idx, addresses, amounts, &batchAuth, contract)
+			// 线程安全地收集结果
+			mu.Lock()
+			responses = append(responses, res)
+			mu.Unlock()
+		}(i, batchAddress, batchAmounts, batchNonce)
+
+		startIndex = endIndex
+	}
+
+	done := make(chan struct{})
+	// 等待所有批次完成并返回结果
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// 等待结果或超时
+	select {
+	case <-done:
+		successCount := 0
+		failedCount := 0
+		for _, res := range responses {
+			if res.Error == "" {
+				successCount++
+			} else {
+				failedCount++
+			}
+		}
+		resInfo := dto.AirdropResponse{
+			Msg:              "airdrop erc success!",
+			CompletedBatches: len(responses),
+			SuccessBatches:   successCount,
+			FailBatches:      failedCount,
+			Data:             responses}
+		return &resInfo, nil
+	case <-ctx.Done():
+		resInfo := dto.AirdropResponse{
+			Msg:              "airdrop erc timeout",
+			CompletedBatches: len(responses),
+			Data:             responses,
+			Error:            ctx.Err().Error(),
+		}
+		return &resInfo, nil
+	}
+}
+
+func (s *AirdropService) processAirdropERC20(idx int, batchAddress []common.Address, batchAmounts []*big.Int, auth *bind.TransactOpts, contract *airdrop.Contracts) (response dto.AirdropInfo) {
+	fromAddr := s.clientInfo.FromAddress
+	trans, err := contract.AirdropERC20(auth, batchAddress, batchAmounts)
+	if trans == nil || err != nil {
+		return dto.AirdropInfo{
+			BatchNum:        idx,
+			Error:           fmt.Sprintf("airdroperc failed: %v", err),
+			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			FromAddress:     fromAddr,
+			WalletAddress:   batchAddress,
+		}
+	} else {
+		return dto.AirdropInfo{
+			BatchNum:        idx,
+			Hash:            trans.Hash().Hex(),
+			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			FromAddress:     fromAddr,
+			WalletAddress:   batchAddress,
+			Error:           "",
+		}
+	}
+
+}
+
+func (s *AirdropService) AirdropBNB(reqCount int, reqBatchSize int, reqAmount []*big.Int) (data *dto.AirdropResponse, err error) {
+	var (
+		responses []dto.AirdropInfo
+		wg        sync.WaitGroup
+		mu        sync.Mutex // 保护response切片的并发写入
+	)
+	fmt.Println("Airdrop contract init---", s.clientInfo.FromAddress)
+	contract, err := s.NewAirdropContract()
+	if err != nil {
+		return nil, fmt.Errorf("new contract failed: %v", err)
+	}
+
+	// generate multiple wallets
+	walletAddresses, err := GetMultiWallets(reqCount)
+	if err != nil || walletAddresses == nil || len(walletAddresses) == 0 {
+		return nil, fmt.Errorf("generate wallet failed: %v", err)
+	}
+
+	addressLen := len(walletAddresses)
+	fromAddr := s.clientInfo.FromAddress
+	ethClient := s.clientInfo.Client
+	auth := s.clientInfo.Auth
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // 设置整体超时
+	defer cancel()
+
+	initialNonce, err := ethClient.PendingNonceAt(ctx, fromAddr)
+	if err != nil {
+		return nil, fmt.Errorf("retrieve nonce failed: %v", err)
+	}
+
+	batchNum := (addressLen + reqBatchSize - 1) / reqBatchSize
+	startIndex := 0
+	currentNonce := initialNonce
+	for i := 0; i < batchNum && startIndex < addressLen; i++ {
+		endIndex := startIndex + reqBatchSize
+		if endIndex > addressLen {
+			endIndex = addressLen
+		}
+
+		batchAddress := walletAddresses[startIndex:endIndex]
+		batchAmounts := reqAmount[startIndex:endIndex]
+		batchNonce := currentNonce
+		currentNonce++
+
+		wg.Add(1)
+		go func(idx int, addresses []common.Address, amounts []*big.Int, nonce uint64) {
+			defer wg.Done()
+			val := utils.CalculateSumOfAmounts(amounts)
+
+			batchAuth := *auth
+			batchAuth.Nonce = big.NewInt(int64(nonce))
+			batchAuth.Context = ctx
+			batchAuth.Value = val
+
+			res := s.processAirdropBNB(idx, addresses, amounts, &batchAuth, contract)
+			// 线程安全地收集结果
+			mu.Lock()
+			responses = append(responses, res)
+			mu.Unlock()
+		}(i, batchAddress, batchAmounts, batchNonce)
+
+		startIndex = endIndex
+	}
+
+	done := make(chan struct{})
+	// 等待所有批次完成并返回结果
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// 等待结果或超时
+	select {
+	case <-done:
+		successCount := 0
+		failedCount := 0
+		for _, res := range responses {
+			if res.Error == "" {
+				successCount++
+			} else {
+				failedCount++
+			}
+		}
+		resInfo := dto.AirdropResponse{
+			Msg:              "airdrop bnb success!",
+			CompletedBatches: len(responses),
+			SuccessBatches:   successCount,
+			FailBatches:      failedCount,
+			Data:             responses}
+		return &resInfo, nil
+	case <-ctx.Done():
+		resInfo := dto.AirdropResponse{
+			Msg:              "airdrop bnb timeout",
+			CompletedBatches: len(responses),
+			Data:             responses,
+			Error:            ctx.Err().Error(),
+		}
+		return &resInfo, nil
+	}
+
+}
+
+func (s *AirdropService) processAirdropBNB(idx int, batchAddress []common.Address, batchAmounts []*big.Int, auth *bind.TransactOpts, contract *airdrop.Contracts) (response dto.AirdropInfo) {
+	fromAddr := s.clientInfo.FromAddress
+	trans, err := contract.AirdropBNB(auth, batchAddress, batchAmounts)
+	if trans == nil || err != nil {
+		return dto.AirdropInfo{
+			BatchNum:        idx,
+			Error:           fmt.Sprintf("airdrop bnb failed: %v", err),
+			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			FromAddress:     fromAddr,
+			WalletAddress:   batchAddress,
+		}
+	} else {
+		return dto.AirdropInfo{
+			BatchNum:        idx,
+			Hash:            trans.Hash().Hex(),
+			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			FromAddress:     fromAddr,
+			WalletAddress:   batchAddress,
+			Error:           "",
+		}
 	}
 }
 
@@ -48,256 +312,4 @@ func GetMultiWallets(count int) (walletAddresses []common.Address, err error) {
 		walletAddresses = append(walletAddresses, address)
 	}
 	return walletAddresses, nil
-}
-
-func (s *AirdropService) AirdropERC20(reqCount int, reqBatchSize int, reqAmount *big.Int) (data *dto.AirdropResponse, err error) {
-	var (
-		wg        sync.WaitGroup
-		mu        sync.Mutex // 保护response切片的并发写入
-		amounts   []*big.Int
-		responses []dto.AirdropInfo
-	)
-	fmt.Println("Airdrop contract init---", s.contractInfo.GetFromAddress())
-
-	// generate multiple wallets
-	walletAddresses, err := GetMultiWallets(reqCount)
-	if err != nil || walletAddresses == nil || len(walletAddresses) == 0 {
-		return nil, fmt.Errorf("generate wallet failed: %v", err)
-	}
-
-	// generate related accounts
-	for range walletAddresses {
-		amounts = append(amounts, reqAmount)
-	}
-	addressLen := len(walletAddresses)
-	fromAddr := s.contractInfo.GetFromAddress()
-	ethClient := s.contractInfo.GetClient()
-	auth := s.contractInfo.GetAuth()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // 设置整体超时
-	defer cancel()
-
-	initialNonce, err := ethClient.PendingNonceAt(ctx, fromAddr)
-	if err != nil {
-		return nil, fmt.Errorf("retrieve nonce failed: %v", err)
-	}
-
-	batchNum := (addressLen + reqBatchSize - 1) / reqBatchSize
-	startIndex := 0
-	currentNonce := initialNonce
-	for i := 0; i < batchNum && startIndex < addressLen; i++ {
-		endIndex := startIndex + reqBatchSize
-		if endIndex > addressLen {
-			endIndex = addressLen
-		}
-
-		batchAddress := walletAddresses[startIndex:endIndex]
-		batchAmounts := amounts[startIndex:endIndex]
-		batchNonce := currentNonce
-		currentNonce++
-
-		wg.Add(1)
-		go func(idx int, addresses []common.Address, amounts []*big.Int, nonce uint64) {
-			defer wg.Done()
-			batchAuth := *auth
-			batchAuth.Nonce = big.NewInt(int64(nonce))
-			batchAuth.Context = ctx
-
-			res := s.processAirdropERC20(idx, addresses, amounts, &batchAuth)
-			// 线程安全地收集结果
-			mu.Lock()
-			responses = append(responses, res)
-			mu.Unlock()
-		}(i, batchAddress, batchAmounts, batchNonce)
-
-		startIndex = endIndex
-	}
-
-	done := make(chan struct{})
-	// 等待所有批次完成并返回结果
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	// 等待结果或超时
-	select {
-	case <-done:
-		successCount := 0
-		failedCount := 0
-		for _, res := range responses {
-			if res.Error == "" {
-				successCount++
-			} else {
-				failedCount++
-			}
-		}
-		resInfo := dto.AirdropResponse{
-			Msg:              "airdrop success!",
-			CompletedBatches: len(responses),
-			SuccessBatches:   successCount,
-			FailBatches:      failedCount,
-			Data:             responses}
-		return &resInfo, nil
-	case <-ctx.Done():
-		resInfo := dto.AirdropResponse{
-			Msg:              "airdrop timeout",
-			CompletedBatches: len(responses),
-			Data:             responses,
-			Error:            ctx.Err().Error(),
-		}
-		return &resInfo, nil
-	}
-}
-
-func (s *AirdropService) processAirdropERC20(idx int, batchAddress []common.Address, batchAmounts []*big.Int, auth *bind.TransactOpts) (response dto.AirdropInfo) {
-	airdropContract := s.contractInfo.GetNewContract()
-	fromAddr := s.contractInfo.GetFromAddress()
-	trans, err := airdropContract.AirdropERC20(auth, batchAddress, batchAmounts)
-	if trans == nil || err != nil {
-		return dto.AirdropInfo{
-			BatchNum:        idx,
-			Error:           fmt.Sprintf("airdrop failed: %v", err),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
-			FromAddress:     fromAddr,
-			WalletAddress:   batchAddress,
-		}
-	} else {
-		return dto.AirdropInfo{
-			BatchNum:        idx,
-			Hash:            trans.Hash().Hex(),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
-			FromAddress:     fromAddr,
-			WalletAddress:   batchAddress,
-			Error:           "",
-		}
-	}
-
-}
-
-func (s *AirdropService) AirdropBNB(reqCount int, reqBatchSize int, reqAmount *big.Int) (data *dto.AirdropResponse, err error) {
-	var (
-		responses []dto.AirdropInfo
-		wg        sync.WaitGroup
-		mu        sync.Mutex // 保护response切片的并发写入
-		amounts   []*big.Int
-	)
-
-	// generate multiple wallets
-	walletAddresses, err := GetMultiWallets(reqCount)
-	if err != nil || walletAddresses == nil || len(walletAddresses) == 0 {
-		return nil, fmt.Errorf("generate wallet failed: %v", err)
-	}
-	// generate related accounts
-	for range walletAddresses {
-		amounts = append(amounts, reqAmount)
-	}
-	addressLen := len(walletAddresses)
-	fromAddr := s.contractInfo.GetFromAddress()
-	ethClient := s.contractInfo.GetClient()
-	auth := s.contractInfo.GetAuth()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // 设置整体超时
-	defer cancel()
-
-	initialNonce, err := ethClient.PendingNonceAt(ctx, fromAddr)
-	if err != nil {
-		return nil, fmt.Errorf("Retrieve nonce failed: %v", err)
-	}
-
-	batchNum := (addressLen + reqBatchSize - 1) / reqBatchSize
-	startIndex := 0
-	currentNonce := initialNonce
-	for i := 0; i < batchNum && startIndex < addressLen; i++ {
-		endIndex := startIndex + reqBatchSize
-		if endIndex > addressLen {
-			endIndex = addressLen
-		}
-
-		batchAddress := walletAddresses[startIndex:endIndex]
-		batchAmounts := amounts[startIndex:endIndex]
-		batchNonce := currentNonce
-		currentNonce++
-
-		wg.Add(1)
-		go func(idx int, addrs []common.Address, amts []*big.Int, nonce uint64) {
-			defer wg.Done()
-			batchAuth := *auth
-			batchAuth.Nonce = big.NewInt(int64(nonce))
-			batchAuth.Context = ctx
-			val := new(big.Int)
-			val.Mul(reqAmount, big.NewInt(int64(len(batchAmounts))))
-			batchAuth.Value = val
-
-			res := s.processAirdropBNB(idx, addrs, amts, &batchAuth)
-			// 线程安全地收集结果
-			mu.Lock()
-			responses = append(responses, res)
-			mu.Unlock()
-		}(i, batchAddress, batchAmounts, batchNonce)
-
-		startIndex = endIndex
-	}
-
-	done := make(chan struct{})
-	// 等待所有批次完成并返回结果
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	// 等待结果或超时
-	select {
-	case <-done:
-		successCount := 0
-		failedCount := 0
-		for _, res := range responses {
-			if res.Error == "" {
-				successCount++
-			} else {
-				failedCount++
-			}
-		}
-		resInfo := dto.AirdropResponse{
-			Msg:              "airdrop success!",
-			CompletedBatches: len(responses),
-			SuccessBatches:   successCount,
-			FailBatches:      failedCount,
-			Data:             responses}
-		return &resInfo, nil
-	case <-ctx.Done():
-		resInfo := dto.AirdropResponse{
-			Msg:              "airdrop timeout",
-			CompletedBatches: len(responses),
-			Data:             responses,
-			Error:            ctx.Err().Error(),
-		}
-		return &resInfo, nil
-	}
-
-}
-
-func (s *AirdropService) processAirdropBNB(idx int, batchAddress []common.Address, batchAmounts []*big.Int, auth *bind.TransactOpts) (response dto.AirdropInfo) {
-	airdropContract := s.contractInfo.GetNewContract()
-	fromAddr := s.contractInfo.GetFromAddress()
-	trans, err := airdropContract.AirdropBNB(auth, batchAddress, batchAmounts)
-	if trans == nil || err != nil {
-		return dto.AirdropInfo{
-			BatchNum:        idx,
-			Error:           fmt.Sprintf("airdrop failed: %v", err),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
-			FromAddress:     fromAddr,
-			WalletAddress:   batchAddress,
-		}
-	} else {
-		return dto.AirdropInfo{
-			BatchNum:        idx,
-			Hash:            trans.Hash().Hex(),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
-			FromAddress:     fromAddr,
-			WalletAddress:   batchAddress,
-			Error:           "",
-		}
-	}
-
 }

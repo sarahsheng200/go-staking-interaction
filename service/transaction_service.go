@@ -17,14 +17,14 @@ import (
 )
 
 type TransactionService struct {
-	contract *adapter.TransactionContractInfo
+	clientInfo *adapter.InitClient
 }
 
 func NewTransactionService(
-	contract *adapter.TransactionContractInfo,
+	clientInfo *adapter.InitClient,
 ) *TransactionService {
 	return &TransactionService{
-		contract: contract,
+		clientInfo: clientInfo,
 	}
 }
 
@@ -34,8 +34,8 @@ func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *dto.E
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
 	// 2. 通过hash查询交易是否成功
 	// 创建转账交易
-	auth := s.contract.Auth
-	ethClient := s.contract.Client
+	auth := s.clientInfo.Auth
+	ethClient := s.clientInfo.Client
 	toAddress := common.HexToAddress(addr)
 	contractAddr := common.HexToAddress(constant.TOKEN_CONTRACT_ADDRESS)
 	mtkContract, err := mtk.NewContracts(contractAddr, ethClient)
@@ -59,8 +59,8 @@ func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *dto.ERC
 	// tx.wait();
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
 	// 2. 通过hash查询交易是否成功
-	ethClient := s.contract.Client
-	fromAddress := s.contract.FromAddress
+	ethClient := s.clientInfo.Client
+	fromAddress := s.clientInfo.FromAddress
 	toAddress := common.HexToAddress(addr)
 	// 1. 准备交易参数
 	// 1.1 动态获取nonce
@@ -82,7 +82,7 @@ func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *dto.ERC
 		Data:     nil, // 无数据
 	})
 	// 3. 签名交易（使用BSC链ID）
-	signedTx, err := types.SignTx(tx, types.NewLondonSigner(s.contract.ChainID), s.contract.PrivateKey)
+	signedTx, err := types.SignTx(tx, types.NewLondonSigner(s.clientInfo.ChainID), s.clientInfo.PrivateKey)
 	if signedTx == nil || err != nil {
 		return nil, fmt.Errorf("signed Tx failed: %v", err)
 	}

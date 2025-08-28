@@ -14,12 +14,12 @@ func Stake(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
-	contract, err := adapter.NewStakeContract()
+	client, err := adapter.NewInitClient()
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
 	}
-	stakeService := service.NewStakeService(contract)
+	stakeService := service.NewStakeService(client)
 	response, err := stakeService.Stake(request.Amount, request.Period)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "stake transaction error", "error": err})
@@ -35,13 +35,13 @@ func Withdraw(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "request body invalid", "error": err.Error()})
 		return
 	}
-	contract, err := adapter.NewStakeContract()
+	client, err := adapter.NewInitClient()
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
 	}
-	stakeService := service.NewStakeService(contract)
-	response, err := stakeService.Withdraw(request.Index)
+	stakeService := service.NewStakeService(client)
+	response, err := stakeService.Withdraw(&request.Index)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "withdrawn transaction error", "error": err})
 		return

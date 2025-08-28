@@ -24,18 +24,18 @@ type TransactionContractInfo struct {
 func NewTransactionContract() (*TransactionContractInfo, error) {
 	clientInfo := GetInitClient()
 
-	if clientInfo.auth == nil {
+	if clientInfo.Auth == nil {
 		return nil, fmt.Errorf("auth should not be nil")
 	}
-	if clientInfo.client == nil {
+	if clientInfo.Client == nil {
 		return nil, fmt.Errorf("client should not be nil")
 	}
 	transactionContractInfo = &TransactionContractInfo{
-		Auth:        clientInfo.auth,
-		FromAddress: clientInfo.fromAddress,
-		ChainID:     clientInfo.chainID,
-		PrivateKey:  clientInfo.privateKey,
-		Client:      clientInfo.client,
+		Auth:        clientInfo.Auth,
+		FromAddress: clientInfo.FromAddress,
+		ChainID:     clientInfo.ChainID,
+		PrivateKey:  clientInfo.PrivateKey,
+		Client:      clientInfo.Client,
 	}
 	return transactionContractInfo, nil
 }

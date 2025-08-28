@@ -1,13 +1,14 @@
 package controller
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
+	"log"
 	"math/big"
 	"net/http"
 	"staking-interaction/adapter"
 	"staking-interaction/dto"
 	"staking-interaction/service"
+	"staking-interaction/utils"
 )
 
 func GenerateMultiWallets(c *gin.Context) {
@@ -47,14 +48,18 @@ func AirdropERC20(c *gin.Context) {
 		return
 	}
 
-	contract, err := adapter.NewAirdropContract()
+	client, err := adapter.NewInitClient()
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
 	}
-	fmt.Println("Airdrop contract GetFromAddress--", contract.GetFromAddress())
-	airdropService := service.NewAirdropService(contract)
-	responses, err := airdropService.AirdropERC20(reqCount, reqBatchSize, reqAmount)
+	amountArray, err := utils.GenerateRandomAmount(reqCount, reqAmount)
+	if err != nil {
+		log.Fatalf("failed to generate random amounts: %v", err)
+	}
+
+	airdropService := service.NewAirdropService(client)
+	responses, err := airdropService.AirdropERC20(reqCount, reqBatchSize, amountArray)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "Airdrop failed", "err": err.Error()})
 		return
@@ -87,14 +92,18 @@ func AirdropBNB(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "amount 必须大于 0"})
 		return
 	}
-
-	contract, err := adapter.NewAirdropContract()
+	amountArray, err := utils.GenerateRandomAmount(reqCount, reqAmount)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "contract init failed", "err": err})
+		log.Fatalf("failed to generate random amounts: %v", err)
+	}
+
+	client, err := adapter.NewInitClient()
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
 	}
-	airdropService := service.NewAirdropService(contract)
-	responses, err := airdropService.AirdropBNB(reqCount, reqBatchSize, reqAmount)
+	airdropService := service.NewAirdropService(client)
+	responses, err := airdropService.AirdropBNB(reqCount, reqBatchSize, amountArray)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "Airdrop failed", "err": err})
 		return

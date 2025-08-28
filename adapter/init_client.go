@@ -14,11 +14,11 @@ import (
 )
 
 type InitClient struct {
-	auth        *bind.TransactOpts
-	fromAddress common.Address
-	client      *ethclient.Client
-	privateKey  *ecdsa.PrivateKey
-	chainID     *big.Int
+	Auth        *bind.TransactOpts
+	FromAddress common.Address
+	Client      *ethclient.Client
+	PrivateKey  *ecdsa.PrivateKey
+	ChainID     *big.Int
 }
 
 var (
@@ -59,11 +59,11 @@ func NewInitClient() (*InitClient, error) {
 	}
 
 	clientInfo = &InitClient{
-		auth:        auth,
-		client:      ethClient,
-		fromAddress: fromAddress,
-		privateKey:  privateKey,
-		chainID:     chainID,
+		Auth:        auth,
+		Client:      ethClient,
+		FromAddress: fromAddress,
+		PrivateKey:  privateKey,
+		ChainID:     chainID,
 	}
 
 	return clientInfo, nil
@@ -73,5 +73,5 @@ func GetInitClient() *InitClient {
 }
 
 func (c *InitClient) CloseInitClient() {
-	c.client.Close()
+	c.Client.Close()
 }
