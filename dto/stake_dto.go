@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 )
@@ -18,4 +19,11 @@ type StakeRequest struct {
 
 type WithDrawnRequest struct {
 	Index big.Int `json:"index"`
+}
+
+type StakeEventListener struct {
+	StakedEventId    common.Hash
+	WithdrawnEventId common.Hash
+	ContractAddress  common.Address
+	ContractABI      abi.ABI
 }

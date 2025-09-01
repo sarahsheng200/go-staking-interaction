@@ -49,7 +49,7 @@ func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *dto.E
 	}
 	sym, _ := mtkContract.Symbol(&bind.CallOpts{})
 	decimal, _ := mtkContract.Decimals(&bind.CallOpts{})
-	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: sym, Decimal: decimal}
+	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: sym, Decimal: decimal, BlockNumber: nil}
 
 	return res, nil
 }
@@ -94,7 +94,7 @@ func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *dto.ERC
 	if receipt == nil || receipt.Status != types.ReceiptStatusSuccessful {
 		return nil, fmt.Errorf("check transaction failed: %v", err)
 	}
-	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: "BNB"}
+	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: "BNB", BlockNumber: receipt.BlockNumber}
 	return res, nil
 	//receipt-------
 	//{

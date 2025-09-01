@@ -86,10 +86,6 @@ func (s *StakeService) Withdraw(index *big.Int) (response *dto.StakeResponse, er
 	return response, nil
 }
 
-func StoreStakeInfo(stake model.Stake) {
-	repository.AddStakeInfo(stake)
-}
-
 func GetAllStakesByFromAddress(id string) (response model.Stake) {
 	stake := repository.GetAllStakesByFromAddress(id)
 	return stake

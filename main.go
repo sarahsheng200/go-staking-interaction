@@ -47,9 +47,7 @@ func main() {
 		log.Fatal("Init client failed: ", err)
 	}
 	defer clientInfo.CloseInitClient()
-	//service.InitStakeContract()
-	//service.InitAirdropContract()
-	//stakeService.ListenToEvents()
+	//listener.ListenToEvents()
 
 	// 创建系统信号接收器
 	signalChan := make(chan os.Signal)
@@ -57,8 +55,8 @@ func main() {
 	<-signalChan
 	log.Println("shutdown server...")
 
-	//stakeService.CloseListener()
-	log.Println("stake event listener closed")
+	//listener.CloseListener()
+	//log.Println("stake event listener closed")
 
 	// 创建5s的超时上下文
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

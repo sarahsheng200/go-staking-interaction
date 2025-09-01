@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"log"
 	"math/big"
 	constant "staking-interaction/common"
 )
@@ -21,12 +20,7 @@ type InitClient struct {
 	ChainID     *big.Int
 }
 
-var (
-	clientInfo *InitClient
-)
-
 func NewInitClient() (*InitClient, error) {
-	log.Println("NewInitClient-----")
 	// 初始化客户端
 	ethClient, err := ethclient.Dial(constant.RAW_URL)
 	if err != nil {
@@ -58,18 +52,13 @@ func NewInitClient() (*InitClient, error) {
 		return nil, fmt.Errorf("failed to create authorized transactor: %v", err)
 	}
 
-	clientInfo = &InitClient{
+	return &InitClient{
 		Auth:        auth,
 		Client:      ethClient,
 		FromAddress: fromAddress,
 		PrivateKey:  privateKey,
 		ChainID:     chainID,
-	}
-
-	return clientInfo, nil
-}
-func GetInitClient() *InitClient {
-	return clientInfo
+	}, nil
 }
 
 func (c *InitClient) CloseInitClient() {

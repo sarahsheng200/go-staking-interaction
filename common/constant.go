@@ -13,4 +13,27 @@ const (
 	MYSQL_URL                = "127.0.0.1:3306"
 	MYSQL_CONFIG             = "charset=utf8&parseTime=True&loc=Local"
 	RAW_URL                  = "https://data-seed-prebsc-2-s1.binance.org:8545"
+	RPC_URL                  = "https://bsc-testnet-rpc.publicnode.com"
 )
+
+const (
+	StakedEventName    = "Staked"
+	WithdrawnEventName = "Withdrawn"
+	BatchSize          = 100
+)
+
+const (
+	TokenTypeBNB       = 1
+	TokenTypeMTK       = 2
+	BillTypeRecharge   = 1
+	BillTypeWithdrawal = 2
+	SyncBlockBuffer    = 10
+)
+
+var OwnerAddresses = []string{
+	token.OWNER1,
+	token.OWNER2,
+	token.OWNER3,
+	token.OWNER4,
+	token.OWNER5,
+}
