@@ -5,14 +5,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 	"log"
-	"staking-interaction/common"
+	"staking-interaction/common/config"
 )
 
 var DB *gorm.DB
 var err error
 
 func MysqlConn() error {
-	dsn := common.MYSQL_USERNAME + ":" + common.MYSQL_PASSWORD + "@tcp(" + common.MYSQL_URL + ")/" + common.MYSQL_DATABASE + "?" + common.MYSQL_CONFIG
+	dsn := config.MYSQL_USERNAME + ":" + config.MYSQL_PASSWORD + "@tcp(" + config.MYSQL_URL + ")/" + config.MYSQL_DATABASE + "?" + config.MYSQL_CONFIG
 
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{

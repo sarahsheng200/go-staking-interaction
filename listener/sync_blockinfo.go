@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"math/big"
+	constant "staking-interaction/common/config"
+	"staking-interaction/common/redis"
 	"staking-interaction/dto"
 	"staking-interaction/model"
 	"staking-interaction/repository"
@@ -21,8 +23,21 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	constant "staking-interaction/common"
 )
+
+var LockTimeouts = map[string]time.Duration{
+	"account_lock":     45 * time.Second, // 所有服务的账户锁都用45秒
+	"withdraw_lock":    60 * time.Second, // 所有服务的提现锁都用60秒
+	"transaction_lock": 30 * time.Second, // 所有服务的交易锁都用30秒
+	"asset_lock":       20 * time.Second, // 所有服务的资产锁都用20秒
+}
+
+var LockAcquisitionTimeouts = map[string]time.Duration{
+	"account_lock":     10 * time.Second, // 获取锁的等待时间
+	"withdraw_lock":    5 * time.Second,
+	"transaction_lock": 3 * time.Second,
+	"asset_lock":       5 * time.Second,
+}
 
 // SyncBlockInfo 区块同步服务
 type SyncBlockInfo struct {
@@ -33,39 +48,95 @@ type SyncBlockInfo struct {
 	workerPool    chan struct{} // 工作池控制并发数量
 	blockManager  *repository.BlockSyncManager
 	workerWg      sync.WaitGroup // 等待所有交易处理Goroutine退出
+	lockManager   *redis.LockManager
+	// 添加配置和指标
+	config  *SyncConfig
+	metrics *SyncMetrics
+	//logger        *logrus.Logger
+}
+
+type SyncConfig struct {
+	WorkerCount     int           `json:"worker_count"`
+	BlockTimeout    time.Duration `json:"block_timeout"`
+	TxTimeout       time.Duration `json:"tx_timeout"`
+	RetryDelay      time.Duration `json:"retry_delay"`
+	MaxBlocksBehind uint64        `json:"max_blocks_behind"`
+	PollInterval    time.Duration `json:"poll_interval"`
+}
+
+type SyncMetrics struct {
+	ProcessedBlocks uint64
+	ProcessedTxs    uint64
+	FailedBlocks    uint64
+	FailedTxs       uint64
+	LastProcessTime time.Time
+	mu              sync.RWMutex
 }
 
 // NewSyncBlockInfo 创建新的区块同步服务
-func NewSyncBlockInfo(client *ethclient.Client, workerCount int) *SyncBlockInfo {
-	manager := repository.NewBlockSyncManager("last_synced_block.txt")
+func NewSyncBlockInfo(client *ethclient.Client, config *SyncConfig, lockManager *redis.LockManager) *SyncBlockInfo {
+	if config == nil {
+		config = &SyncConfig{
+			WorkerCount:     5,
+			BlockTimeout:    30 * time.Second,
+			TxTimeout:       60 * time.Second,
+			RetryDelay:      10 * time.Second,
+			MaxBlocksBehind: 30,
+			PollInterval:    5 * time.Second,
+		}
+	}
 
 	return &SyncBlockInfo{
 		client:       client,
-		blockManager: manager,
-		workerPool:   make(chan struct{}, workerCount), // 限制并发处理数量
+		blockManager: repository.NewBlockSyncManager("last_synced_block.txt"),
+		workerPool:   make(chan struct{}, config.WorkerCount), // 限制并发处理数量
+		config:       config,
+		metrics:      &SyncMetrics{},
+		lockManager:  lockManager,
+		//logger:       logger,
 	}
 }
 
 // Start 启动区块同步
 func (s *SyncBlockInfo) Start() {
+	if !atomic.CompareAndSwapInt32(&s.isSyncRunning, 0, 1) {
+		fmt.Println("sync service is already running")
+		return
+	}
+	fmt.Println("sync service is running...")
+	// 初始化起始区块
+	if err := s.initializeStartBlock(); err != nil {
+		fmt.Printf("initialize start block: %w", err)
+		return
+	}
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("initialize start block: %v", r)
+				return
+			}
+		}()
+		s.syncLoop()
+	}()
+
+	fmt.Println("Sync service started successfully", "initial_done_block", s.getDoneBlock())
+}
+
+func (s *SyncBlockInfo) initializeStartBlock() error {
 	//if err := s.loadLastSyncedBlock(); err != nil || s.getDoneBlock() == 0 {
+	//fmt.Println("Failed to load last synced block, starting from current", "error", err)
 	if s.getDoneBlock() == 0 {
-		//fmt.Println("Failed to load last synced block, starting from current", "error", err)
-		currentBlock, e := s.client.BlockNumber(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), s.config.BlockTimeout)
+		defer cancel()
+
+		currentBlock, e := s.client.BlockNumber(ctx)
 		if e != nil {
-			fmt.Printf("failed to get current block: %w", e)
-			return
+			return fmt.Errorf("failed to get current block: %w", e)
 		}
 		s.setDoneBlock(currentBlock)
 	}
-
-	// 标记同步状态为运行中
-	atomic.StoreInt32(&s.isSyncRunning, 1)
-
-	s.syncLoop()
-
-	fmt.Println("Sync service started successfully", "initial_done_block", s.getDoneBlock())
-
+	return nil
 }
 
 // Stop 停止区块同步
@@ -122,6 +193,7 @@ func (s *SyncBlockInfo) syncLoop() {
 		// 更新已完成区块号并持久化
 		newDoneBlock := doneBlock + 1
 		s.setDoneBlock(newDoneBlock)
+		// 保存区块到文件中
 		if err := s.saveSyncedBlock(newDoneBlock); err != nil {
 			fmt.Println("Failed to save synced block", "block", newDoneBlock, "error", err)
 		} else {
@@ -175,6 +247,7 @@ func (s *SyncBlockInfo) processBlock(blockCtx context.Context, chainID *big.Int,
 	}
 
 	txWg.Wait()
+	fmt.Println("Processed block success", "block_number", blockNumber, "transaction_count", len(block.Transactions()))
 	return nil
 }
 
@@ -245,14 +318,136 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 	return nil
 }
 
-// 检查是否为合约地址
-func (s *SyncBlockInfo) isContractTx(blockCtx context.Context, to common.Address) (bool, error) {
-	// 合约地址有字节码，普通地址无
-	code, err := s.client.CodeAt(blockCtx, to, nil)
+// 通用代币交易处理逻辑
+func (s *SyncBlockInfo) handleTokenTransaction(
+	tx *types.Transaction,
+	receipt *types.Receipt,
+	accountId int,
+	fromAddr, toAddr common.Address,
+	amount *big.Int,
+	tokenType int,
+) error {
+	//获取锁
+	assetLock, err := s.lockManager.AcquireAssetLock(context.Background(), accountId, tokenType)
 	if err != nil {
-		return false, fmt.Errorf("get code at address: %w", err)
+		return fmt.Errorf("acquire assetLock failed: %w ,accountid:%d, tx_hash:%s", err, accountId, tx.Hash().Hex())
 	}
-	return len(code) > 0, nil
+
+	//释放锁
+	defer func() {
+		unlockCtx, unlockCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer unlockCancel()
+
+		if err := assetLock.Unlock(unlockCtx); err != nil {
+			fmt.Printf("unlock assetLock failed: %w ,accountid:%d, tx_hash:%s", err, accountId, tx.Hash().Hex())
+		} else {
+			fmt.Printf("lock relase success, tx_hash:%s, blocknumber:%d", tx.Hash().Hex(), receipt.BlockNumber.Int64())
+		}
+
+	}()
+
+	return s.executeTransactionWithLock(receipt, accountId, fromAddr, toAddr, amount, tokenType)
+}
+
+func (s *SyncBlockInfo) executeTransactionWithLock(
+	receipt *types.Receipt,
+	accountId int,
+	fromAddr, toAddr common.Address,
+	amount *big.Int,
+	tokenType int) error {
+	return repository.TxWithTransaction(func(txRepo *repository.TxRepository) error {
+		hash := receipt.TxHash.String()
+		// 确认交易记录是否已存在
+		isExistTx, err := txRepo.TransactionExists(hash)
+		if err != nil {
+			return fmt.Errorf("get TransactionExists failed: %w, hash:%s", err, hash)
+		}
+		if isExistTx {
+			return fmt.Errorf("this transaction is existed, hash:%s", hash)
+		}
+
+		// 获取账户资产
+		asset, err := txRepo.GetAssetByAccountIdWithLock(accountId)
+		if err != nil {
+			return fmt.Errorf("get account asset: %w", err)
+		}
+
+		// 计算new balance
+		preBalance, nextBalance, err := s.calculateBalance(tokenType, asset, amount)
+		if err != nil {
+			return fmt.Errorf("unsupported token type: %d", tokenType)
+		}
+
+		// 创建账单记录
+		bill := model.Bill{
+			AccountID:   accountId,
+			TokenType:   tokenType,
+			BillType:    constant.BillTypeRecharge,
+			Amount:      amount.String(),
+			Fee:         strconv.FormatUint(receipt.GasUsed, 10),
+			PreBalance:  preBalance,
+			NextBalance: nextBalance,
+			CreatedAt:   time.Now(),
+		}
+		if err := txRepo.AddBill(&bill); err != nil {
+			return fmt.Errorf("add bill: %w", err)
+		}
+
+		// 创建交易日志
+		transLog := model.TransactionLog{
+			AccountID:   accountId,
+			TokenType:   tokenType,
+			Hash:        hash,
+			Amount:      amount.String(),
+			FromAddress: fromAddr.Hex(),
+			ToAddress:   toAddr.Hex(),
+			BlockNumber: receipt.BlockNumber.String(),
+			CreatedAt:   time.Now(),
+		}
+		if err := txRepo.AddTransactionLog(&transLog); err != nil {
+			return fmt.Errorf("add transaction log: %w", err)
+		}
+
+		// 更新资产余额（使用乐观锁）
+		if err := txRepo.UpdateAssetWithOptimisticLock(asset, nextBalance, tokenType); err != nil {
+			return fmt.Errorf("update asset: %w", err)
+		}
+
+		fmt.Println("Successfully processed transaction",
+			"hash", hash,
+			"accountId", accountId,
+			"tokenType", tokenType,
+			"amount", amount.String())
+		return nil
+	})
+}
+
+func (s *SyncBlockInfo) calculateBalance(tokenType int, asset *model.AccountAsset, amount *big.Int) (string, string, error) {
+	var preBalanceStr string
+	var err error
+	var preBalance *big.Int
+
+	switch tokenType {
+	case constant.TokenTypeMTK:
+		preBalanceStr = asset.MtkBalance
+		preBalance, err = utils.StringToBigInt(preBalanceStr)
+		if err != nil {
+			return "", "", fmt.Errorf("parse pre balance: %w", err)
+		}
+
+	case constant.TokenTypeBNB:
+		preBalanceStr = asset.BnbBalance
+		preBalance, err = utils.StringToBigInt(preBalanceStr)
+		if err != nil {
+			return "", "", fmt.Errorf("parse pre balance: %w", err)
+		}
+
+	default:
+		return "", "", fmt.Errorf("unsupported token type: %d", tokenType)
+	}
+
+	nextBalance := new(big.Int).Add(preBalance, amount)
+	return preBalanceStr, nextBalance.String(), nil
 }
 
 // 处理ERC20代币交易
@@ -271,100 +466,6 @@ func (s *SyncBlockInfo) handleERC20Tx(tx *types.Transaction, receipt *types.Rece
 		transEvent.Value,
 		constant.TokenTypeMTK,
 	)
-}
-
-// 通用代币交易处理逻辑
-func (s *SyncBlockInfo) handleTokenTransaction(
-	tx *types.Transaction,
-	receipt *types.Receipt,
-	accountId int,
-	fromAddr, toAddr common.Address,
-	amount *big.Int,
-	tokenType int,
-) error {
-	// 使用事务确保数据一致性
-	return repository.TxWithTransaction(func(txRepo *repository.TxRepository) error {
-		// 确认交易记录是否已存在
-		isExistTx := txRepo.FindTransactionLog(receipt.TxHash.String())
-		if isExistTx {
-			return fmt.Errorf("this transaction is existed")
-		}
-
-		// 获取账户资产
-		asset, err := txRepo.GetAccountAssetByAccountId(accountId)
-		if err != nil {
-			return fmt.Errorf("get account asset: %w", err)
-		}
-
-		// 根据代币类型更新余额
-		var preBalanceStr string
-		var nextBalance *big.Int
-
-		switch tokenType {
-		case constant.TokenTypeMTK:
-			preBalanceStr = asset.MtkBalance
-			preBalance, err := utils.StringToBigInt(preBalanceStr)
-			if err != nil {
-				return fmt.Errorf("parse pre balance: %w", err)
-			}
-			nextBalance = new(big.Int).Add(preBalance, amount)
-			asset.MtkBalance = nextBalance.String()
-
-		case constant.TokenTypeBNB:
-			preBalanceStr = asset.BnbBalance
-			preBalance, err := utils.StringToBigInt(preBalanceStr)
-			if err != nil {
-				return fmt.Errorf("parse pre balance: %w", err)
-			}
-			nextBalance = new(big.Int).Add(preBalance, amount)
-			asset.BnbBalance = nextBalance.String()
-
-		default:
-			return fmt.Errorf("unsupported token type: %d", tokenType)
-		}
-
-		// 创建账单记录
-		bill := model.Bill{
-			AccountID:   accountId,
-			TokenType:   tokenType,
-			BillType:    constant.BillTypeRecharge,
-			Amount:      amount.String(),
-			Fee:         strconv.FormatUint(receipt.GasUsed, 10),
-			PreBalance:  preBalanceStr,
-			NextBalance: nextBalance.String(),
-			CreatedAt:   time.Now(),
-		}
-		if err := txRepo.AddBill(&bill); err != nil {
-			return fmt.Errorf("add bill: %w", err)
-		}
-
-		// 创建交易日志
-		transLog := model.TransactionLog{
-			AccountID:   accountId,
-			TokenType:   tokenType,
-			Hash:        tx.Hash().Hex(),
-			Amount:      amount.String(),
-			FromAddress: fromAddr.Hex(),
-			ToAddress:   toAddr.Hex(),
-			BlockNumber: receipt.BlockNumber.String(),
-			CreatedAt:   time.Now(),
-		}
-		if err := txRepo.AddTransactionLog(&transLog); err != nil {
-			return fmt.Errorf("add transaction log: %w", err)
-		}
-
-		// 更新资产余额
-		if err := txRepo.UpdateAsset(asset); err != nil {
-			return fmt.Errorf("update asset: %w", err)
-		}
-
-		fmt.Println("Successfully processed transaction",
-			"hash", tx.Hash().Hex(),
-			"accountId", accountId,
-			"tokenType", tokenType,
-			"amount", amount.String())
-		return nil
-	})
 }
 
 // 解析ERC20交易事件
@@ -411,6 +512,16 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 	return nil, fmt.Errorf("no erc20 transfer event found in receipt")
 }
 
+// 检查是否为合约地址
+func (s *SyncBlockInfo) isContractTx(blockCtx context.Context, to common.Address) (bool, error) {
+	// 合约地址有字节码，普通地址无
+	code, err := s.client.CodeAt(blockCtx, to, nil)
+	if err != nil {
+		return false, fmt.Errorf("get code at address: %w", err)
+	}
+	return len(code) > 0, nil
+}
+
 // 检查接收地址是否有效
 func isToAddrValid(toAddr common.Address) bool {
 	for _, addr := range constant.OwnerAddresses {
@@ -423,7 +534,10 @@ func isToAddrValid(toAddr common.Address) bool {
 
 // 检查账户是否有效
 func isValidAccount(fromAddr common.Address) (bool, *int) {
-	account := repository.GetAccount(fromAddr.Hex())
+	account, err := repository.GetAccount(fromAddr.Hex())
+	if err != nil {
+		return false, nil
+	}
 	if account.AccountID > 0 {
 		return true, &account.AccountID
 	}

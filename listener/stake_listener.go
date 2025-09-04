@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	"math/big"
-	constant "staking-interaction/common"
+	constant "staking-interaction/common/config"
 	stakeContract "staking-interaction/contracts/stake"
 	"staking-interaction/dto"
 	"staking-interaction/model"

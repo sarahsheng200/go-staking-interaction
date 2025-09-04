@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
-	constant "staking-interaction/common"
+	constant "staking-interaction/common/config"
 )
 
 type InitClient struct {

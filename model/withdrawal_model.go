@@ -3,7 +3,7 @@ package model
 import "time"
 
 type Withdrawal struct {
-	ID            uint64    `gorm:"column:id;type:bigint unsigned;primary_key;AUTO_INCREMENT" json:"id"`
+	ID            int       `gorm:"column:id;type:bigint unsigned;primary_key;AUTO_INCREMENT" json:"id"`
 	TokenType     int       `gorm:"column:token_type;type:int" json:"token_type"` // 1.BNB 2.MTK
 	WalletAddress string    `gorm:"column:wallet_address;type:varchar(64)" json:"wallet_address"`
 	Amount        string    `gorm:"column:amount;type:varchar(64)" json:"amount"` // 数量, 10bnb

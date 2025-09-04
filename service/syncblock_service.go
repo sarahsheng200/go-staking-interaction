@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	"math/big"
-	constant "staking-interaction/common"
+	constant "staking-interaction/common/config"
 	"staking-interaction/dto"
 	"staking-interaction/model"
 	"staking-interaction/repository"
@@ -246,12 +246,11 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 }
 
 func isValidAccount(fromAddr common.Address) (bool, *int) {
-	account := repository.GetAccount(fromAddr.Hex())
-	// 判断from address是否是本平台用户
-	if account.AccountID > 0 {
-		return true, &account.AccountID
+	account, err := repository.GetAccount(fromAddr.Hex())
+	if err != nil || account.AccountID <= 0 {
+		return false, nil
 	}
-	return false, nil
+	return true, &account.AccountID
 }
 
 func isToAddrValid(toAddr common.Address) bool {

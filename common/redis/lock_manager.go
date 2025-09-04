@@ -1,4 +1,4 @@
-package common
+package redis
 
 import (
 	"context"
@@ -24,8 +24,22 @@ func NewLockManager(redisClient *redis.Client) *LockManager {
 	return &LockManager{redis: redisClient}
 }
 
+// 锁超时配置
+var LockTimeouts = map[string]time.Duration{
+	"withdraw_lock":    10 * time.Second,
+	"transaction_lock": 10 * time.Second,
+	"asset_lock":       10 * time.Second,
+	"lock":             10 * time.Second,
+}
+
+var LockAcquisitionTimeouts = map[string]time.Duration{
+	"withdraw_lock":    10 * time.Second,
+	"transaction_lock": 10 * time.Second,
+	"asset_lock":       10 * time.Second,
+}
+
 // GetAssetLock 获取资产锁
-func (l *LockManager) GetAssetLock(accountId int, tokenType int, expiration time.Duration) *DistributedLock {
+func (l *LockManager) GetAssetLock(accountId int, tokenType int) *DistributedLock {
 	lockKey := fmt.Sprintf("asset_lock:%d:%d", accountId, tokenType)
 	lockVal := generateLockValue()
 
@@ -33,12 +47,12 @@ func (l *LockManager) GetAssetLock(accountId int, tokenType int, expiration time
 		redis:      l.redis,
 		lockKey:    lockKey,
 		lockVal:    lockVal,
-		expiration: expiration,
+		expiration: LockTimeouts["asset_lock"],
 	}
 }
 
 // GetTransactionLogLock 获取账户锁
-func (l *LockManager) GetTransactionLogLock(logId int, expiration time.Duration) *DistributedLock {
+func (l *LockManager) GetTransactionLogLock(logId int) *DistributedLock {
 	lockKey := fmt.Sprintf("log_lock:%d", logId)
 	lockVal := generateLockValue()
 
@@ -46,12 +60,12 @@ func (l *LockManager) GetTransactionLogLock(logId int, expiration time.Duration)
 		redis:      l.redis,
 		lockKey:    lockKey,
 		lockVal:    lockVal,
-		expiration: expiration,
+		expiration: LockTimeouts["transaction_lock"],
 	}
 }
 
 // GetWithdrawLock 获取提现锁
-func (l *LockManager) GetWithdrawLock(withdrawId int, expiration time.Duration) *DistributedLock {
+func (l *LockManager) GetWithdrawLock(withdrawId int) *DistributedLock {
 	lockKey := fmt.Sprintf("withdraw_lock:%d", withdrawId)
 	lockVal := generateLockValue()
 
@@ -59,8 +73,44 @@ func (l *LockManager) GetWithdrawLock(withdrawId int, expiration time.Duration) 
 		redis:      l.redis,
 		lockKey:    lockKey,
 		lockVal:    lockVal,
-		expiration: expiration,
+		expiration: LockTimeouts["withdraw_lock"],
 	}
+}
+
+// AcquireAssetLock 直接获取并加锁
+func (l *LockManager) AcquireAssetLock(ctx context.Context, accountID int, tokenType int) (*DistributedLock, error) {
+	lock := l.GetAssetLock(accountID, tokenType)
+	timeout := LockAcquisitionTimeouts["asset_lock"]
+
+	if err := lock.Lock(ctx, timeout); err != nil {
+		return nil, fmt.Errorf("acquire asset lock %d: %w", accountID, err)
+	}
+
+	return lock, nil
+}
+
+// AcquireTransactionLogLock 直接获取并加锁
+func (l *LockManager) AcquireTransactionLogLock(ctx context.Context, logId int) (*DistributedLock, error) {
+	lock := l.GetTransactionLogLock(logId)
+	timeout := LockAcquisitionTimeouts["transaction_lock"]
+
+	if err := lock.Lock(ctx, timeout); err != nil {
+		return nil, fmt.Errorf("acquire transaction lock %d: %w", logId, err)
+	}
+
+	return lock, nil
+}
+
+// AcquireWithdrawLock 直接获取并加锁
+func (l *LockManager) AcquireWithdrawLock(ctx context.Context, withdrawId int) (*DistributedLock, error) {
+	lock := l.GetWithdrawLock(withdrawId)
+	timeout := LockAcquisitionTimeouts["withdraw_lock"]
+
+	if err := lock.Lock(ctx, timeout); err != nil {
+		return nil, fmt.Errorf("acquire withdraw lock %d: %w", withdrawId, err)
+	}
+
+	return lock, nil
 }
 
 // TryLock 尝试锁
@@ -93,6 +143,8 @@ func (dl *DistributedLock) Lock(ctx context.Context, timeout time.Duration) erro
 	}
 	return fmt.Errorf("lock timeout")
 }
+
+// 便捷方法：直接获取并加锁
 
 // Unlock 释放锁（使用 Lua 脚本确保原子性）
 func (dl *DistributedLock) Unlock(ctx context.Context) error {

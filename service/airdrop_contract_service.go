@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"staking-interaction/adapter"
-	constant "staking-interaction/common"
+	constant "staking-interaction/common/config"
 	"staking-interaction/contracts/airdrop"
 	"staking-interaction/dto"
 	"staking-interaction/utils"

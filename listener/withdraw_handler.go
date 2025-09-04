@@ -1,8 +1,10 @@
 package listener
 
 import (
+	"context"
 	"fmt"
-	constant "staking-interaction/common"
+	constant "staking-interaction/common/config"
+	"staking-interaction/common/redis"
 	"staking-interaction/model"
 	"staking-interaction/repository"
 	"staking-interaction/service"
@@ -14,11 +16,13 @@ import (
 type WithdrawHandler struct {
 	txService                *service.TransactionService
 	isWithDrawHandlerRunning int32 // 原子操作控制同步状态
+	lockManager              *redis.LockManager
 }
 
-func NewWithdrawHandler(txService *service.TransactionService) *WithdrawHandler {
+func NewWithdrawHandler(txService *service.TransactionService, lockManager *redis.LockManager) *WithdrawHandler {
 	return &WithdrawHandler{
-		txService: txService,
+		txService:   txService,
+		lockManager: lockManager,
 	}
 }
 
@@ -43,37 +47,63 @@ func (w *WithdrawHandler) processWithdrawals() {
 			fmt.Printf("Service stopping, processed %d/%d withdrawals\n", i, len(withDrawList))
 			break
 		}
-		err := repository.WdWithTransaction(func(wRepo *repository.WdRepo) error {
-			var newWithdraw model.Withdrawal
-			asset, err := wRepo.GetAssetByAddress(withdraw.WalletAddress)
-			if err != nil {
-				return fmt.Errorf("get asset by address failed: %w", err)
-			}
-			switch withdraw.TokenType {
-			case constant.TokenTypeBNB:
-				res, err := w.transactionBNB(withdraw, asset.BnbBalance)
-				if err != nil {
-					return fmt.Errorf("transactionBNB failed: %w, withdrawid: %d", err, withdraw.ID)
-				}
-				newWithdraw = *res
-			case constant.TokenTypeMTK:
-				res, err := w.transactionERC20(withdraw, asset.MtkBalance)
-				if err != nil {
-					return fmt.Errorf("transactionERC20 failed:  %w", err)
-				}
-				newWithdraw = *res
-			}
-			if err := wRepo.UpdateWithdrawalInfo(newWithdraw); err != nil {
-				return fmt.Errorf("update withdraw info failed: %w", err)
-			}
-			fmt.Println("update withdraw info success")
-			return nil
-		})
 
-		if err != nil {
-			fmt.Println("transaction failed: ", err)
+		if err := w.executeHandlerWithLock(withdraw); err != nil {
+			fmt.Printf("transaction failed: %v, withdrawid: %d", err, withdraw.ID)
 		}
 	}
+}
+
+func (w *WithdrawHandler) executeHandlerWithLock(withdraw model.Withdrawal) error {
+	//获取锁
+	account, err := repository.GetAccount(withdraw.WalletAddress)
+	if err != nil {
+		return fmt.Errorf("get wallet account failed: %w", err)
+	}
+	accountId := account.AccountID
+	assetLock, err := w.lockManager.AcquireAssetLock(context.Background(), accountId, withdraw.TokenType)
+	if err != nil {
+		return fmt.Errorf("acquire assetLock failed: %w ,wallet address:%d", err, withdraw.WalletAddress)
+	}
+
+	//释放锁
+	defer func() {
+		unlockCtx, unlockCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer unlockCancel()
+
+		if err := assetLock.Unlock(unlockCtx); err != nil {
+			fmt.Printf("unlock assetLock failed: %w ,wallet address:%d", err, withdraw.WalletAddress)
+		} else {
+			fmt.Printf("lock relase success, wallet address:%d", withdraw.WalletAddress)
+		}
+	}()
+
+	return repository.WdWithTransaction(func(wdRepo *repository.WdRepo) error {
+		var newWithdraw model.Withdrawal
+		asset, err := wdRepo.GetAssetByAccountIdWithLock(accountId)
+		if err != nil {
+			return fmt.Errorf("get asset by address failed: %w", err)
+		}
+		switch withdraw.TokenType {
+		case constant.TokenTypeBNB:
+			res, err := w.transactionBNB(withdraw, asset.BnbBalance)
+			if err != nil {
+				return fmt.Errorf("transactionBNB failed: %w, withdrawid: %d", err, withdraw.ID)
+			}
+			newWithdraw = *res
+		case constant.TokenTypeMTK:
+			res, err := w.transactionERC20(withdraw, asset.MtkBalance)
+			if err != nil {
+				return fmt.Errorf("transactionERC20 failed:  %w", err)
+			}
+			newWithdraw = *res
+		}
+		if err := wdRepo.UpdateWithdrawalInfo(newWithdraw); err != nil {
+			return fmt.Errorf("update withdraw info failed: %w", err)
+		}
+		fmt.Println("update withdraw info success")
+		return nil
+	})
 }
 
 func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance string) (*model.Withdrawal, error) {

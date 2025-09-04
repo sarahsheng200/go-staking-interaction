@@ -6,21 +6,23 @@ import (
 	"staking-interaction/model"
 )
 
-func GetAccount(fromAddress string) *model.Account {
-	account := &model.Account{}
-	database.DB.Model(&model.Account{}).Where("wallet_address = ?", fromAddress).First(account)
+func GetAccount(fromAddress string) (*model.Account, error) {
+	account := model.Account{}
+	if err := database.DB.Model(&model.Account{}).Where("wallet_address = ?", fromAddress).First(&account).Error; err != nil {
+		return nil, fmt.Errorf("repo: get account asset failed: %w", err)
+	}
 
-	return account
+	return &account, nil
 }
 
 func GetAccountAsset(accountId int) (*model.AccountAsset, error) {
-	asset := &model.AccountAsset{}
-	err := database.DB.Model(&model.AccountAsset{}).Where("account_id = ?", accountId).First(asset).Error
+	asset := model.AccountAsset{}
+	err := database.DB.Model(&model.AccountAsset{}).Where("account_id = ?", accountId).First(&asset).Error
 	if err != nil {
 		return nil, fmt.Errorf("repo: get account asset failed: %w", err)
 	}
 
-	return asset, nil
+	return &asset, nil
 }
 
 func UpdateAsset(asset *model.AccountAsset) error {

@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"staking-interaction/adapter"
-	constant "staking-interaction/common"
+	constant "staking-interaction/common/config"
 	"staking-interaction/contracts/stake"
 	"staking-interaction/dto"
 	"staking-interaction/model"

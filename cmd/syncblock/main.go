@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/adapter"
+	"staking-interaction/common/config"
+	redisClient "staking-interaction/common/redis"
 	"staking-interaction/database"
 	"staking-interaction/listener"
 	"staking-interaction/service"
@@ -12,6 +14,7 @@ import (
 )
 
 func main() {
+	// 1. 初始化数据库
 	err := database.MysqlConn()
 	if err != nil {
 		log.Fatal("MySQL database connect failed: ", err)
@@ -24,14 +27,26 @@ func main() {
 		}
 	}()
 
+	// 2. 初始化 Redis 连接
+	redisConfig := config.LoadRedisConfig()
+	redis, err := redisClient.NewRedisClientWithRetry(redisConfig, 3)
+	if err != nil {
+		log.Fatal("Redis connection failed: ", err)
+	}
+	defer redis.Close()
+
+	// 3. 创建 LockManager 实例
+	lockManager := redisClient.NewLockManager(redis)
+	log.Println("LockManager initialized successfully")
+
+	// 4. 初始化区块链客户端
 	clientInfo, err := adapter.NewInitClient()
 	if err != nil {
 		log.Fatal("Init client failed: ", err)
 	}
-
-	//sync block
+	// 5. syncBlock
 	log.Println("Initializing sync block...")
-	syncBlock := listener.NewSyncBlockInfo(clientInfo.Client, 5)
+	syncBlock := listener.NewSyncBlockInfo(clientInfo.Client, nil, lockManager)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -47,10 +62,10 @@ func main() {
 		syncBlock.Stop()
 	}()
 
-	// withdraw handler
+	// 6. withdraw handler
 	log.Println("Initializing withdraw handler...")
 	txService := service.NewTransactionService(clientInfo)
-	withdrawHd := listener.NewWithdrawHandler(txService)
+	withdrawHd := listener.NewWithdrawHandler(txService, lockManager)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -66,9 +81,9 @@ func main() {
 		withdrawHd.Stop()
 	}()
 
-	//sync withdraw
+	// 7. sync withdraw
 	log.Println("Initializing sync withdraw...")
-	syncWithdraw := listener.NewSyncWithdrawHandler(clientInfo.Client)
+	syncWithdraw := listener.NewSyncWithdrawHandler(clientInfo.Client, lockManager)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -86,7 +101,7 @@ func main() {
 
 	log.Println("SyncWithdrawHandler launched, all services initialized!")
 
-	// 创建系统信号接收器
+	// 8. 等待关闭信号
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-signalChan

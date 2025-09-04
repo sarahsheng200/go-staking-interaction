@@ -1,4 +1,4 @@
-package common
+package config
 
 import "staking-interaction/token"
 
@@ -14,6 +14,11 @@ const (
 	MYSQL_CONFIG             = "charset=utf8&parseTime=True&loc=Local"
 	RAW_URL                  = "https://data-seed-prebsc-2-s1.binance.org:8545"
 	RPC_URL                  = "https://bsc-testnet-rpc.publicnode.com"
+
+	REDIS_HOST     = token.REDIS_HOST
+	REDIS_PORT     = token.REDIS_PORT
+	REDIS_PASSWORD = token.REDIS_PASSWORD
+	REDIS_DATABASE = token.REDIS_DATABASE
 )
 
 const (
