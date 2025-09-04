@@ -37,3 +37,10 @@ var OwnerAddresses = []string{
 	token.OWNER4,
 	token.OWNER5,
 }
+
+const (
+	WithdrawStatusInit    = 1
+	WithdrawStatusPending = 2
+	WithdrawStatusSuccess = 3
+	WithdrawStatusFailed  = 4
+)

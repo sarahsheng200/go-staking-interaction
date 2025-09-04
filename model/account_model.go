@@ -10,8 +10,9 @@ type Account struct {
 
 // AccountAsset 对应 account_asset 表
 type AccountAsset struct {
-	AssetID    int    `gorm:"column:asset_id;type:int;primary_key;AUTO_INCREMENT" json:"asset_id"`
-	AccountID  int    `gorm:"column:account_id;type:int;not null" json:"account_id"`
-	BnbBalance string `gorm:"column:bnb_balance;type:varchar(64);default:''" json:"bnb_balance"`
-	MtkBalance string `gorm:"column:mtk_balance;type:varchar(64);default:''" json:"mtk_balance"`
+	AssetID    int     `gorm:"column:asset_id;type:int;primary_key;AUTO_INCREMENT" json:"asset_id"`
+	AccountID  int     `gorm:"column:account_id;type:int;not null" json:"account_id"`
+	BnbBalance string  `gorm:"column:bnb_balance;type:varchar(64);default:''" json:"bnb_balance"`
+	MtkBalance string  `gorm:"column:mtk_balance;type:varchar(64);default:''" json:"mtk_balance"`
+	Account    Account `gorm:"foreignKey:AccountID;references:AccountID"`
 }

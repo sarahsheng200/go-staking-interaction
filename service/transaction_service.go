@@ -50,7 +50,7 @@ func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *dto.E
 	sym, _ := mtkContract.Symbol(&bind.CallOpts{})
 	decimal, _ := mtkContract.Decimals(&bind.CallOpts{})
 	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: sym, Decimal: decimal, BlockNumber: nil}
-
+	fmt.Println("TransactionService SendErc20:--- ", res.Hash)
 	return res, nil
 }
 
@@ -95,22 +95,8 @@ func (s *TransactionService) SendBNB(addr string, amount *big.Int) (res *dto.ERC
 		return nil, fmt.Errorf("check transaction failed: %v", err)
 	}
 	res = &dto.ERCRes{Hash: tx.Hash().Hex(), Symbol: "BNB", BlockNumber: receipt.BlockNumber}
+	fmt.Println("TransactionService SendBNB:--- ", res.Hash)
 	return res, nil
-	//receipt-------
-	//{
-	//	"root": "0x",
-	//	"status": "0x1",
-	//	"cumulativeGasUsed": "0x5208",
-	//	"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-	//	"logs": [],
-	//"transactionHash": "0x07ec51efdb281221e68a525215d85288bcbf6760d3c204dedec075155b2ad609",
-	//"contractAddress": "0x0000000000000000000000000000000000000000",
-	//"gasUsed": "0x5208",
-	//"effectiveGasPrice": "0x5f5e100",
-	//"blockHash": "0xfe9566fc0ef62293bad9badc6397897cc6fa1755d6b9165403b771b1a0f06a74",
-	//"blockNumber": "0x3c20ed3",
-	//"transactionIndex": "0x0"
-	//}
 
 	// 方案二：使用预签名生成hash的方式发送交易，转账之前提前生成了hash
 	// 好处是：因为交易上链稳定是一个比较耗时的操作，大多数方式是发完交易区一直等待稳定，
