@@ -1,51 +1,27 @@
 package config
 
-import "staking-interaction/token"
-
+// BillType 账单类型
 const (
-	PRIVATE_KEY              = token.LOCAL_PRIVATE_KEY
-	STAKE_CONTRACT_ADDRESS   = token.LOCAL_STAKE_CONTRACT_ADDRESS
-	AIRDROP_CONTRACT_ADDRESS = token.AIRDROP_CONTRACT_ADDRESS
-	TOKEN_CONTRACT_ADDRESS   = token.TOKEN_CONTRACT_ADDRESS
-	MYSQL_USERNAME           = "root"
-	MYSQL_PASSWORD           = "00000000"
-	MYSQL_DATABASE           = "web3-contract"
-	MYSQL_URL                = "127.0.0.1:3306"
-	MYSQL_CONFIG             = "charset=utf8&parseTime=True&loc=Local"
-	RAW_URL                  = "https://data-seed-prebsc-2-s1.binance.org:8545"
-	RPC_URL                  = "https://bsc-testnet-rpc.publicnode.com"
-
-	REDIS_HOST     = token.REDIS_HOST
-	REDIS_PORT     = token.REDIS_PORT
-	REDIS_PASSWORD = token.REDIS_PASSWORD
-	REDIS_DATABASE = token.REDIS_DATABASE
-)
-
-const (
-	StakedEventName    = "Staked"
-	WithdrawnEventName = "Withdrawn"
-	BatchSize          = 100
-)
-
-const (
-	TokenTypeBNB       = 1
-	TokenTypeMTK       = 2
 	BillTypeRecharge   = 1
 	BillTypeWithdrawal = 2
-	SyncBlockBuffer    = 10
 )
 
-var OwnerAddresses = []string{
-	token.OWNER1,
-	token.OWNER2,
-	token.OWNER3,
-	token.OWNER4,
-	token.OWNER5,
-}
-
+// WithdrawStatus 提现状态
 const (
 	WithdrawStatusInit    = 1
 	WithdrawStatusPending = 2
 	WithdrawStatusSuccess = 3
 	WithdrawStatusFailed  = 4
+)
+
+// Token 类型
+const (
+	TokenTypeBNB = 1
+	TokenTypeMTK = 2
+)
+
+// 事件名称
+const (
+	StakedEventName    = "Staked"
+	WithdrawnEventName = "Withdrawn"
 )

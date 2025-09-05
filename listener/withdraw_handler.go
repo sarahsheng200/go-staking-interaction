@@ -3,7 +3,7 @@ package listener
 import (
 	"context"
 	"fmt"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/common/redis"
 	"staking-interaction/model"
 	"staking-interaction/repository"
@@ -36,9 +36,9 @@ func (w *WithdrawHandler) Start() {
 }
 
 func (w *WithdrawHandler) processWithdrawals() {
-	withDrawList, err := repository.GetWithdrawalInfoByStatus(constant.WithdrawStatusInit)
+	withDrawList, err := repository.GetWithdrawalInfoByStatus(config.WithdrawStatusInit)
 	if err != nil {
-		fmt.Printf("get init withdraw info: %w", err)
+		fmt.Printf("get init withdraw info: %v\n", err)
 		return
 	}
 
@@ -49,7 +49,7 @@ func (w *WithdrawHandler) processWithdrawals() {
 		}
 
 		if err := w.executeHandlerWithLock(withdraw); err != nil {
-			fmt.Printf("transaction failed: %v, withdrawid: %d", err, withdraw.ID)
+			fmt.Printf("transaction failed: %v, withdrawid: %d\n", err, withdraw.ID)
 		}
 	}
 }
@@ -72,9 +72,9 @@ func (w *WithdrawHandler) executeHandlerWithLock(withdraw model.Withdrawal) erro
 		defer unlockCancel()
 
 		if err := assetLock.Unlock(unlockCtx); err != nil {
-			fmt.Printf("unlock assetLock failed: %w ,wallet address:%d", err, withdraw.WalletAddress)
+			fmt.Printf("unlock assetLock failed: %v ,wallet address:%s\n", err, withdraw.WalletAddress)
 		} else {
-			fmt.Printf("lock relase success, wallet address:%d", withdraw.WalletAddress)
+			fmt.Printf("lock relase success, wallet address:%v\n", withdraw.WalletAddress)
 		}
 	}()
 
@@ -85,13 +85,13 @@ func (w *WithdrawHandler) executeHandlerWithLock(withdraw model.Withdrawal) erro
 			return fmt.Errorf("get asset by address failed: %w", err)
 		}
 		switch withdraw.TokenType {
-		case constant.TokenTypeBNB:
+		case config.TokenTypeBNB:
 			res, err := w.transactionBNB(withdraw, asset.BnbBalance)
 			if err != nil {
 				return fmt.Errorf("transactionBNB failed: %w, withdrawid: %d", err, withdraw.ID)
 			}
 			newWithdraw = *res
-		case constant.TokenTypeMTK:
+		case config.TokenTypeMTK:
 			res, err := w.transactionERC20(withdraw, asset.MtkBalance)
 			if err != nil {
 				return fmt.Errorf("transactionERC20 failed:  %w", err)
@@ -124,7 +124,7 @@ func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance s
 	}
 
 	withdraw.Hash = tx.Hash
-	withdraw.Status = constant.WithdrawStatusPending
+	withdraw.Status = config.WithdrawStatusPending
 
 	return &withdraw, nil
 }
@@ -147,7 +147,7 @@ func (w *WithdrawHandler) transactionERC20(withdraw model.Withdrawal, mtkBalance
 	}
 
 	withdraw.Hash = tx.Hash
-	withdraw.Status = constant.WithdrawStatusPending
+	withdraw.Status = config.WithdrawStatusPending
 
 	return &withdraw, nil
 }

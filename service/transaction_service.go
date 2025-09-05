@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"staking-interaction/adapter"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/contracts/mtk"
 	"staking-interaction/dto"
 	"time"
@@ -34,18 +34,20 @@ func (s *TransactionService) SendErc20(addr string, amount *big.Int) (res *dto.E
 	// 1. 实现转账，获取转账的hash（交易完成后才有hash）
 	// 2. 通过hash查询交易是否成功
 	// 创建转账交易
+	cfg := config.Get()
 	auth := s.clientInfo.Auth
 	ethClient := s.clientInfo.Client
 	toAddress := common.HexToAddress(addr)
-	contractAddr := common.HexToAddress(constant.TOKEN_CONTRACT_ADDRESS)
+	contractAddr := common.HexToAddress(cfg.BlockchainConfig.Contracts.Token)
 	mtkContract, err := mtk.NewContracts(contractAddr, ethClient)
+
 	if err != nil {
-		return nil, fmt.Errorf("contract create failed: %v", err)
+		return nil, fmt.Errorf("contract create failed: %v\n", err)
 	}
 
 	tx, err := mtkContract.Transfer(auth, toAddress, amount)
 	if tx == nil || err != nil {
-		return nil, fmt.Errorf("transfer failed: %v", err)
+		return nil, fmt.Errorf("transfer failed: %v\n", err)
 	}
 	sym, _ := mtkContract.Symbol(&bind.CallOpts{})
 	decimal, _ := mtkContract.Decimals(&bind.CallOpts{})

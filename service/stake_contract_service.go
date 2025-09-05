@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"staking-interaction/adapter"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/contracts/stake"
 	"staking-interaction/dto"
 	"staking-interaction/model"
@@ -24,11 +24,12 @@ func NewStakeService(
 	}
 }
 
-func (s *StakeService) NewStakeContract() (*stake.Contracts, error) {
-	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
+var cfg = config.Get()
+var stakeContractAddr = common.HexToAddress(cfg.BlockchainConfig.Contracts.Stake)
 
+func (s *StakeService) NewStakeContract() (*stake.Contracts, error) {
 	//creates a new instance of Contracts, bound to a specific deployed contract
-	stakingContract, err := stake.NewContracts(contractAddress, s.clientInfo.Client)
+	stakingContract, err := stake.NewContracts(stakeContractAddr, s.clientInfo.Client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staking contract")
 	}
@@ -55,7 +56,7 @@ func (s *StakeService) Stake(amount int64, period uint8) (response *dto.StakeRes
 
 	response = &dto.StakeResponse{
 		Hash:            trans.Hash().String(),
-		ContractAddress: constant.STAKE_CONTRACT_ADDRESS,
+		ContractAddress: stakeContractAddr.String(),
 		FromAddress:     s.clientInfo.FromAddress,
 		Method:          "stake",
 	}
@@ -78,7 +79,7 @@ func (s *StakeService) Withdraw(index *big.Int) (response *dto.StakeResponse, er
 
 	response = &dto.StakeResponse{
 		Hash:            trans.Hash().String(),
-		ContractAddress: constant.STAKE_CONTRACT_ADDRESS,
+		ContractAddress: stakeContractAddr.String(),
 		FromAddress:     s.clientInfo.FromAddress,
 		Method:          "withdraw",
 	}

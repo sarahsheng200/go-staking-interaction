@@ -12,7 +12,8 @@ var DB *gorm.DB
 var err error
 
 func MysqlConn() error {
-	dsn := config.MYSQL_USERNAME + ":" + config.MYSQL_PASSWORD + "@tcp(" + config.MYSQL_URL + ")/" + config.MYSQL_DATABASE + "?" + config.MYSQL_CONFIG
+	cfg := config.Get()
+	dsn := cfg.DatabaseConfig.DSN()
 
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{

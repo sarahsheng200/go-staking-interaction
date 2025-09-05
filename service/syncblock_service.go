@@ -9,11 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	"math/big"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/dto"
 	"staking-interaction/model"
 	"staking-interaction/repository"
-	"staking-interaction/token"
 	"staking-interaction/utils"
 	"strconv"
 	"strings"
@@ -166,8 +165,8 @@ func handleERC20Tx(tx *types.Transaction, receipt *types.Receipt, accountId int)
 
 	bill := model.Bill{
 		AccountID:   accountId,
-		TokenType:   constant.TokenTypeMTK,
-		BillType:    constant.BillTypeRecharge,
+		TokenType:   config.TokenTypeMTK,
+		BillType:    config.BillTypeRecharge,
 		Amount:      amount.String(),
 		Fee:         strconv.FormatUint(receipt.GasUsed, 10),
 		PreBalance:  asset.MtkBalance,
@@ -179,7 +178,7 @@ func handleERC20Tx(tx *types.Transaction, receipt *types.Receipt, accountId int)
 
 	transLog := model.TransactionLog{
 		AccountID:   accountId,
-		TokenType:   constant.TokenTypeMTK,
+		TokenType:   config.TokenTypeMTK,
 		Hash:        tx.Hash().Hex(),
 		Amount:      amount.String(),
 		FromAddress: from.Hex(),
@@ -214,7 +213,8 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 			"type": "event"
 		}
 	]`
-	var tokenAddr = common.HexToAddress(token.TOKEN_CONTRACT_ADDRESS)
+	conf := config.Get()
+	var tokenAddr = common.HexToAddress(conf.BlockchainConfig.Contracts.Token)
 
 	erc20ABI, err := abi.JSON(strings.NewReader(erc20TransferEventABIJson))
 	if err != nil {
@@ -254,8 +254,9 @@ func isValidAccount(fromAddr common.Address) (bool, *int) {
 }
 
 func isToAddrValid(toAddr common.Address) bool {
+	cfg := config.Get()
 	// to address是否是本平台账户
-	for _, addr := range constant.OwnerAddresses {
+	for _, addr := range cfg.BlockchainConfig.Owners {
 		if common.HexToAddress(addr) == toAddr {
 			fmt.Println("SyncBlockInfo: to is our portfolio", addr, " toAddr: ", toAddr)
 			return true
@@ -281,8 +282,8 @@ func handleBnbTx(tx *types.Transaction, from common.Address, receipt *types.Rece
 
 	bill := model.Bill{
 		AccountID:   accountId,
-		TokenType:   constant.TokenTypeBNB,
-		BillType:    constant.BillTypeRecharge,
+		TokenType:   config.TokenTypeBNB,
+		BillType:    config.BillTypeRecharge,
 		Amount:      amount.String(),
 		Fee:         strconv.FormatUint(receipt.GasUsed, 10),
 		PreBalance:  asset.BnbBalance,
@@ -294,7 +295,7 @@ func handleBnbTx(tx *types.Transaction, from common.Address, receipt *types.Rece
 
 	transLog := model.TransactionLog{
 		AccountID:   accountId,
-		TokenType:   constant.TokenTypeBNB,
+		TokenType:   config.TokenTypeBNB,
 		Hash:        tx.Hash().Hex(),
 		Amount:      amount.String(),
 		FromAddress: from.Hex(),

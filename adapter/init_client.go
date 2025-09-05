@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 )
 
 type InitClient struct {
@@ -21,14 +21,15 @@ type InitClient struct {
 }
 
 func NewInitClient() (*InitClient, error) {
+	cfg := config.Get()
 	// 初始化客户端
-	ethClient, err := ethclient.Dial(constant.RAW_URL)
+	ethClient, err := ethclient.Dial(cfg.BlockchainConfig.RawURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to the stake contract: %v", err)
 	}
 
 	// 加载私钥
-	privateKey, err := crypto.HexToECDSA(constant.PRIVATE_KEY)
+	privateKey, err := crypto.HexToECDSA(cfg.BlockchainConfig.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %v", err)
 	}

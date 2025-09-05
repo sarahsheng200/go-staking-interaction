@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"math/big"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/common/redis"
 	"staking-interaction/dto"
 	"staking-interaction/model"
 	"staking-interaction/repository"
-	"staking-interaction/token"
 	"staking-interaction/utils"
 	"strconv"
 	"strings"
@@ -24,20 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
-
-var LockTimeouts = map[string]time.Duration{
-	"account_lock":     45 * time.Second, // 所有服务的账户锁都用45秒
-	"withdraw_lock":    60 * time.Second, // 所有服务的提现锁都用60秒
-	"transaction_lock": 30 * time.Second, // 所有服务的交易锁都用30秒
-	"asset_lock":       20 * time.Second, // 所有服务的资产锁都用20秒
-}
-
-var LockAcquisitionTimeouts = map[string]time.Duration{
-	"account_lock":     10 * time.Second, // 获取锁的等待时间
-	"withdraw_lock":    5 * time.Second,
-	"transaction_lock": 3 * time.Second,
-	"asset_lock":       5 * time.Second,
-}
 
 // SyncBlockInfo 区块同步服务
 type SyncBlockInfo struct {
@@ -58,10 +43,8 @@ type SyncBlockInfo struct {
 type SyncConfig struct {
 	WorkerCount     int           `json:"worker_count"`
 	BlockTimeout    time.Duration `json:"block_timeout"`
-	TxTimeout       time.Duration `json:"tx_timeout"`
 	RetryDelay      time.Duration `json:"retry_delay"`
 	MaxBlocksBehind uint64        `json:"max_blocks_behind"`
-	PollInterval    time.Duration `json:"poll_interval"`
 }
 
 type SyncMetrics struct {
@@ -73,16 +56,17 @@ type SyncMetrics struct {
 	mu              sync.RWMutex
 }
 
+var conf = config.Get()
+var blockChainConf = conf.BlockchainConfig
+
 // NewSyncBlockInfo 创建新的区块同步服务
 func NewSyncBlockInfo(client *ethclient.Client, config *SyncConfig, lockManager *redis.LockManager) *SyncBlockInfo {
 	if config == nil {
 		config = &SyncConfig{
-			WorkerCount:     5,
-			BlockTimeout:    30 * time.Second,
-			TxTimeout:       60 * time.Second,
-			RetryDelay:      10 * time.Second,
-			MaxBlocksBehind: 30,
-			PollInterval:    5 * time.Second,
+			WorkerCount:     blockChainConf.Sync.Workers,
+			BlockTimeout:    blockChainConf.Sync.SyncInterval,
+			RetryDelay:      blockChainConf.Sync.RetryDelay,
+			MaxBlocksBehind: blockChainConf.Sync.BlockBuffer,
 		}
 	}
 
@@ -106,14 +90,14 @@ func (s *SyncBlockInfo) Start() {
 	fmt.Println("sync service is running...")
 	// 初始化起始区块
 	if err := s.initializeStartBlock(); err != nil {
-		fmt.Printf("initialize start block: %w", err)
+		fmt.Printf("initialize start block: %v\n", err)
 		return
 	}
 
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("initialize start block: %v", r)
+				fmt.Printf("initialize start block: %v\n", r)
 				return
 			}
 		}()
@@ -162,7 +146,7 @@ func (s *SyncBlockInfo) syncLoop() {
 	}
 
 	for atomic.LoadInt32(&s.isSyncRunning) == 1 {
-		blockCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		blockCtx, cancel := context.WithTimeout(context.Background(), s.config.BlockTimeout)
 
 		currentBlock, err := s.client.BlockNumber(blockCtx)
 		if err != nil {
@@ -174,7 +158,7 @@ func (s *SyncBlockInfo) syncLoop() {
 
 		doneBlock := s.getDoneBlock()
 		// 控制同步距离，避免超前太多
-		if currentBlock < doneBlock+30 {
+		if currentBlock < doneBlock+s.config.MaxBlocksBehind {
 			fmt.Println("Waiting for new blocks", "current", currentBlock, "done", doneBlock)
 			cancel()
 			time.Sleep(10 * time.Second)
@@ -310,7 +294,7 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 			fromAddr,
 			*tx.To(),
 			tx.Value(),
-			constant.TokenTypeBNB,
+			config.TokenTypeBNB,
 		)
 	}
 
@@ -339,9 +323,9 @@ func (s *SyncBlockInfo) handleTokenTransaction(
 		defer unlockCancel()
 
 		if err := assetLock.Unlock(unlockCtx); err != nil {
-			fmt.Printf("unlock assetLock failed: %w ,accountid:%d, tx_hash:%s", err, accountId, tx.Hash().Hex())
+			fmt.Printf("unlock assetLock failed: %w ,accountid:%d, tx_hash:%s\n", err, accountId, tx.Hash().Hex())
 		} else {
-			fmt.Printf("lock relase success, tx_hash:%s, blocknumber:%d", tx.Hash().Hex(), receipt.BlockNumber.Int64())
+			fmt.Printf("lock relase success, tx_hash:%s, blocknumber:%d\n", tx.Hash().Hex(), receipt.BlockNumber.Int64())
 		}
 
 	}()
@@ -382,7 +366,7 @@ func (s *SyncBlockInfo) executeTransactionWithLock(
 		bill := model.Bill{
 			AccountID:   accountId,
 			TokenType:   tokenType,
-			BillType:    constant.BillTypeRecharge,
+			BillType:    config.BillTypeRecharge,
 			Amount:      amount.String(),
 			Fee:         strconv.FormatUint(receipt.GasUsed, 10),
 			PreBalance:  preBalance,
@@ -428,14 +412,14 @@ func (s *SyncBlockInfo) calculateBalance(tokenType int, asset *model.AccountAsse
 	var preBalance *big.Int
 
 	switch tokenType {
-	case constant.TokenTypeMTK:
+	case config.TokenTypeMTK:
 		preBalanceStr = asset.MtkBalance
 		preBalance, err = utils.StringToBigInt(preBalanceStr)
 		if err != nil {
 			return "", "", fmt.Errorf("parse pre balance: %w", err)
 		}
 
-	case constant.TokenTypeBNB:
+	case config.TokenTypeBNB:
 		preBalanceStr = asset.BnbBalance
 		preBalance, err = utils.StringToBigInt(preBalanceStr)
 		if err != nil {
@@ -464,12 +448,13 @@ func (s *SyncBlockInfo) handleERC20Tx(tx *types.Transaction, receipt *types.Rece
 		transEvent.FromAddress,
 		transEvent.ToAddress,
 		transEvent.Value,
-		constant.TokenTypeMTK,
+		config.TokenTypeMTK,
 	)
 }
 
 // 解析ERC20交易事件
 func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
+
 	tran := dto.TransferEvent{}
 	var erc20TransferEventABIJson = `[
 		{
@@ -484,7 +469,7 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 		}
 	]`
 
-	tokenAddr := common.HexToAddress(token.TOKEN_CONTRACT_ADDRESS)
+	tokenAddr := common.HexToAddress(blockChainConf.Contracts.Token)
 	erc20ABI, err := abi.JSON(strings.NewReader(erc20TransferEventABIJson))
 	if err != nil {
 		return nil, fmt.Errorf("parse erc20 abi: %w", err)
@@ -524,7 +509,7 @@ func (s *SyncBlockInfo) isContractTx(blockCtx context.Context, to common.Address
 
 // 检查接收地址是否有效
 func isToAddrValid(toAddr common.Address) bool {
-	for _, addr := range constant.OwnerAddresses {
+	for _, addr := range blockChainConf.Owners {
 		if common.HexToAddress(addr) == toAddr {
 			return true
 		}
@@ -546,9 +531,9 @@ func isValidAccount(fromAddr common.Address) (bool, *int) {
 
 func getTokenTypeName(tokenType int) string {
 	switch tokenType {
-	case constant.TokenTypeMTK:
+	case config.TokenTypeMTK:
 		return "MTK"
-	case constant.TokenTypeBNB:
+	case config.TokenTypeBNB:
 		return "BNB"
 	default:
 		return strconv.Itoa(tokenType)

@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	"math/big"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	stakeContract "staking-interaction/contracts/stake"
 	"staking-interaction/dto"
 	"staking-interaction/model"
@@ -25,22 +25,22 @@ var (
 )
 
 func ListenToEvents() {
-
-	client, err := ethclient.Dial(constant.RPC_URL)
+	conf := config.Get()
+	client, err := ethclient.Dial(conf.BlockchainConfig.RpcURL)
 	if err != nil {
 		log.Fatalf("ListenToStakedEvent: Failed to connect to the BSC network: %v", err)
 	}
 	defer client.Close()
 
-	contractAddress := common.HexToAddress(constant.STAKE_CONTRACT_ADDRESS)
+	contractAddress := common.HexToAddress(conf.BlockchainConfig.Contracts.Stake)
 
 	contractABI, err := abi.JSON(strings.NewReader(stakeContract.ContractsMetaData.ABI))
 	if err != nil {
 		log.Fatalf("ListenToStakedEvent: Failed to parse contract ABI: %v", err)
 	}
 	isRunning = true
-	stakedEventId := contractABI.Events[constant.StakedEventName].ID
-	withdrawnEventId := contractABI.Events[constant.WithdrawnEventName].ID
+	stakedEventId := contractABI.Events[config.StakedEventName].ID
+	withdrawnEventId := contractABI.Events[config.WithdrawnEventName].ID
 
 	startBlock, err := client.BlockNumber(context.Background())
 	if err != nil {
@@ -58,7 +58,7 @@ func ListenToEvents() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		endBlock := startBlock + constant.BatchSize
+		endBlock := startBlock + uint64(conf.BlockchainConfig.Sync.BatchSize)
 		if endBlock > currentBlock {
 			endBlock = currentBlock
 		}
@@ -102,7 +102,7 @@ func handleLog(l types.Log, listener dto.StakeEventListener) {
 	switch l.Topics[0] {
 	case listener.StakedEventId:
 		var event stakeContract.ContractsStaked
-		if err := listener.ContractABI.UnpackIntoInterface(&event, constant.StakedEventName, l.Data); err != nil {
+		if err := listener.ContractABI.UnpackIntoInterface(&event, config.StakedEventName, l.Data); err != nil {
 			log.Printf("ListenToStakedEvent: Staked failed to unpack event: %v", err)
 			return
 		}
@@ -127,7 +127,7 @@ func handleLog(l types.Log, listener dto.StakeEventListener) {
 			Hash:            l.TxHash.Hex(),
 			ContractAddress: listener.ContractAddress.Hex(),
 			FromAddress:     l.Address.Hex(),
-			Method:          constant.StakedEventName,
+			Method:          config.StakedEventName,
 			Amount:          event.Amount.String(),
 			BlockNumber:     int64(l.BlockNumber),
 			Status:          0,
@@ -138,7 +138,7 @@ func handleLog(l types.Log, listener dto.StakeEventListener) {
 
 	case listener.WithdrawnEventId:
 		var event stakeContract.ContractsWithdrawn
-		if err := listener.ContractABI.UnpackIntoInterface(&event, constant.WithdrawnEventName, l.Data); err != nil {
+		if err := listener.ContractABI.UnpackIntoInterface(&event, config.WithdrawnEventName, l.Data); err != nil {
 			log.Printf("ListenToStakedEvent: Withdrawn failed to unpack event: %v", err)
 			return
 		}
@@ -163,7 +163,7 @@ func handleLog(l types.Log, listener dto.StakeEventListener) {
 			Hash:            l.TxHash.Hex(),
 			ContractAddress: listener.ContractAddress.Hex(),
 			FromAddress:     l.Address.Hex(),
-			Method:          constant.WithdrawnEventName,
+			Method:          config.WithdrawnEventName,
 			Amount:          event.TotalAmount.String(),
 			BlockNumber:     int64(l.BlockNumber),
 			Status:          1,

@@ -8,17 +8,18 @@ import (
 	"time"
 )
 
-func NewRedisClient(config *config.RedisConfig) (*redis.Client, error) {
+func NewRedisClient(redisConfig config.RedisConfig) (*redis.Client, error) {
+
 	client := redis.NewClient(&redis.Options{
-		Addr:         fmt.Sprintf("%s:%d", config.Host, config.Port),
-		Password:     config.Password,
-		DB:           config.Database,
-		PoolSize:     config.PoolSize,
-		MinIdleConns: config.MinIdleConns,
-		DialTimeout:  config.DialTimeout,
-		ReadTimeout:  config.ReadTimeout,
-		WriteTimeout: config.WriteTimeout,
-		IdleTimeout:  config.IdleTimeout,
+		Addr:         fmt.Sprintf("%s:%d", redisConfig.Host, redisConfig.Port),
+		Password:     redisConfig.Password,
+		DB:           redisConfig.DatabaseConfig,
+		PoolSize:     redisConfig.PoolSize,
+		MinIdleConns: redisConfig.MinIdleConns,
+		DialTimeout:  redisConfig.DialTimeout,
+		ReadTimeout:  redisConfig.ReadTimeout,
+		WriteTimeout: redisConfig.WriteTimeout,
+		IdleTimeout:  redisConfig.IdleTimeout,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -32,12 +33,15 @@ func NewRedisClient(config *config.RedisConfig) (*redis.Client, error) {
 	return client, nil
 }
 
-func NewRedisClientWithRetry(config *config.RedisConfig, maxRetries int) (*redis.Client, error) {
+func NewRedisClientWithRetry() (*redis.Client, error) {
 	var client *redis.Client
 	var err error
+	conf := config.Get()
+	redisConfig := conf.RedisConfig
+	maxRetries := conf.Sync.RetryAttempts
 
 	for i := 0; i <= maxRetries; i++ {
-		client, err = NewRedisClient(config)
+		client, err = NewRedisClient(redisConfig)
 		if err == nil {
 			return client, nil
 		}

@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/common/redis"
 	"staking-interaction/model"
 	"staking-interaction/repository"
@@ -22,6 +22,8 @@ type SyncWithdrawHandler struct {
 	isWithDrawHandlerRunning int32
 	lockManager              *redis.LockManager
 }
+
+var withdrawConf = config.Get().BlockchainConfig
 
 func NewSyncWithdrawHandler(client *ethclient.Client, lockManager *redis.LockManager) *SyncWithdrawHandler {
 	return &SyncWithdrawHandler{
@@ -42,7 +44,7 @@ func (s *SyncWithdrawHandler) Stop() {
 
 func (s *SyncWithdrawHandler) syncWithdraw() {
 	for atomic.LoadInt32(&s.isWithDrawHandlerRunning) == 1 {
-		withDrawList, err := repository.GetWithdrawalInfoByStatus(constant.WithdrawStatusPending)
+		withDrawList, err := repository.GetWithdrawalInfoByStatus(config.WithdrawStatusPending)
 		if err != nil {
 			fmt.Printf("SyncWithdrawHandler: GetWithdrawInfo failed: %v\n", err)
 			continue
@@ -61,7 +63,7 @@ func (s *SyncWithdrawHandler) syncWithdraw() {
 func (s *SyncWithdrawHandler) processWithdraw(withdrawInfo model.Withdrawal) error {
 	fmt.Println("withdrawInfo.Hash:", withdrawInfo.Hash)
 	hash := common.HexToHash(withdrawInfo.Hash)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), withdrawConf.Sync.SyncInterval)
 	defer cancel()
 
 	receipt, err := s.client.TransactionReceipt(ctx, hash)
@@ -107,28 +109,28 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 
 	//释放锁
 	defer func() {
-		unlockCtx, unlockCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		unlockCtx, unlockCancel := context.WithTimeout(context.Background(), withdrawConf.Sync.RetryDelay)
 		defer unlockCancel()
 
 		if err := assetLock.Unlock(unlockCtx); err != nil {
-			fmt.Printf("unlock assetLock failed: %w ,accountid:%d, tx_hash:%s", err, account.AccountID, withdrawInfo.Hash)
+			fmt.Printf("unlock assetLock failed: %w ,accountid:%d, tx_hash:%s\n", err, account.AccountID, withdrawInfo.Hash)
 		}
 		if err := withdrawLock.Unlock(unlockCtx); err != nil {
-			fmt.Printf("unlock withdrawLock failed: %w ,withdrawid:%d, tx_hash:%s", err, withdrawInfo.ID, withdrawInfo.Hash)
+			fmt.Printf("unlock withdrawLock failed: %w ,withdrawid:%d, tx_hash:%s\n", err, withdrawInfo.ID, withdrawInfo.Hash)
 		}
-		fmt.Printf("lock  releasing: blocknumber:%s, tx_hash:%s", receipt.BlockNumber.String(), withdrawInfo.Hash)
+		fmt.Printf("lock  releasing: blocknumber:%s, tx_hash:%s\n", receipt.BlockNumber.String(), withdrawInfo.Hash)
 	}()
 
 	return repository.SwWithTransaction(func(wd *repository.SwRepo) error {
 		if receipt.Status != types.ReceiptStatusSuccessful {
-			withdrawInfo.Status = constant.WithdrawStatusFailed
+			withdrawInfo.Status = config.WithdrawStatusFailed
 			if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
 				fmt.Printf("SyncWithdrawHandler: UpdateWithdrawInfo failed: %v\n", err)
 			}
 			return fmt.Errorf("SyncWithdrawHandler: GetTransactionReceipt failed id: %d, hash:%s\n", withdrawInfo.ID, withdrawInfo.Hash)
 		}
 
-		withdrawInfo.Status = constant.WithdrawStatusSuccess
+		withdrawInfo.Status = config.WithdrawStatusSuccess
 		if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
 			return fmt.Errorf("SyncWithdrawHandler: UpdateWithdrawInfo failed: %v, withdrawid:%d\n", err, withdrawInfo.ID)
 		}
@@ -138,7 +140,7 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 		if err != nil {
 			return fmt.Errorf("SyncWithdrawHandler: GetBlockNumber failed: %v\n", err)
 		}
-		expectBlockNumber := new(big.Int).Add(blockNumber, big.NewInt(30))
+		expectBlockNumber := new(big.Int).Add(blockNumber, big.NewInt(int64(withdrawConf.Sync.BlockBuffer)))
 		if big.NewInt(int64(currentHeight)).Cmp(expectBlockNumber) < 0 { //current height< block number+30
 			return fmt.Errorf("SyncWithdrawHandler: current block height is not enough, currentHeight: %d, receipt block number:%d \n", currentHeight, blockNumber)
 		}
@@ -149,9 +151,9 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 		}
 		var pre string
 		switch withdrawInfo.TokenType {
-		case constant.TokenTypeBNB:
+		case config.TokenTypeBNB:
 			pre = asset.BnbBalance
-		case constant.TokenTypeMTK:
+		case config.TokenTypeMTK:
 			pre = asset.MtkBalance
 		}
 		preBalance, err := utils.StringToBigInt(pre)
@@ -165,7 +167,7 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 		bill := model.Bill{
 			AccountID:   account.AccountID,
 			TokenType:   withdrawInfo.TokenType,
-			BillType:    constant.BillTypeWithdrawal,
+			BillType:    config.BillTypeWithdrawal,
 			Amount:      amount.String(),
 			Fee:         strconv.FormatUint(receipt.GasUsed, 10),
 			PreBalance:  pre,

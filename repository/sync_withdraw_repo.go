@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/database"
 	"staking-interaction/model"
 	"time"
@@ -57,9 +57,9 @@ func (w *SwRepo) UpdateAssetWithOptimisticLock(
 
 	// 更新余额和版本号
 	switch tokenType {
-	case constant.TokenTypeMTK:
+	case config.TokenTypeMTK:
 		asset.MtkBalance = newBalance
-	case constant.TokenTypeBNB:
+	case config.TokenTypeBNB:
 		asset.BnbBalance = newBalance
 	default:
 		return fmt.Errorf("unsupported token type: %d", tokenType)

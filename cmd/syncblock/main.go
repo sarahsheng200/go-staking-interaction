@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/adapter"
-	"staking-interaction/common/config"
 	redisClient "staking-interaction/common/redis"
 	"staking-interaction/database"
 	"staking-interaction/listener"
@@ -28,8 +27,7 @@ func main() {
 	}()
 
 	// 2. 初始化 Redis 连接
-	redisConfig := config.LoadRedisConfig()
-	redis, err := redisClient.NewRedisClientWithRetry(redisConfig, 3)
+	redis, err := redisClient.NewRedisClientWithRetry()
 	if err != nil {
 		log.Fatal("Redis connection failed: ", err)
 	}

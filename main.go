@@ -18,6 +18,7 @@ import (
 const PORT = 8084
 
 func main() {
+
 	err := database.MysqlConn()
 	if err != nil {
 		log.Fatal("MySQL database connect failed: ", err)

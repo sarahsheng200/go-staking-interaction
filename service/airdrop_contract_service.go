@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"staking-interaction/adapter"
-	constant "staking-interaction/common/config"
+	"staking-interaction/common/config"
 	"staking-interaction/contracts/airdrop"
 	"staking-interaction/dto"
 	"staking-interaction/utils"
@@ -29,9 +29,11 @@ func NewAirdropService(
 	}
 }
 
+var conf = config.Get()
+var airdropContractAddr = common.HexToAddress(conf.BlockchainConfig.Contracts.Airdrop)
+
 func (s *AirdropService) NewAirdropContract() (*airdrop.Contracts, error) {
-	contractAddress := common.HexToAddress(constant.AIRDROP_CONTRACT_ADDRESS)
-	airdropContract, err := airdrop.NewContracts(contractAddress, s.clientInfo.Client)
+	airdropContract, err := airdrop.NewContracts(airdropContractAddr, s.clientInfo.Client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create airdroperc contract")
 	}
@@ -148,7 +150,7 @@ func (s *AirdropService) processAirdropERC20(idx int, batchAddress []common.Addr
 		return dto.AirdropInfo{
 			BatchNum:        idx,
 			Error:           fmt.Sprintf("airdroperc failed: %v", err),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			ContractAddress: airdropContractAddr.String(),
 			FromAddress:     fromAddr,
 			WalletAddress:   batchAddress,
 		}
@@ -156,7 +158,7 @@ func (s *AirdropService) processAirdropERC20(idx int, batchAddress []common.Addr
 		return dto.AirdropInfo{
 			BatchNum:        idx,
 			Hash:            trans.Hash().Hex(),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			ContractAddress: airdropContractAddr.String(),
 			FromAddress:     fromAddr,
 			WalletAddress:   batchAddress,
 			Error:           "",
@@ -275,7 +277,7 @@ func (s *AirdropService) processAirdropBNB(idx int, batchAddress []common.Addres
 		return dto.AirdropInfo{
 			BatchNum:        idx,
 			Error:           fmt.Sprintf("airdrop bnb failed: %v", err),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			ContractAddress: airdropContractAddr.String(),
 			FromAddress:     fromAddr,
 			WalletAddress:   batchAddress,
 		}
@@ -283,7 +285,7 @@ func (s *AirdropService) processAirdropBNB(idx int, batchAddress []common.Addres
 		return dto.AirdropInfo{
 			BatchNum:        idx,
 			Hash:            trans.Hash().Hex(),
-			ContractAddress: constant.AIRDROP_CONTRACT_ADDRESS,
+			ContractAddress: airdropContractAddr.String(),
 			FromAddress:     fromAddr,
 			WalletAddress:   batchAddress,
 			Error:           "",
