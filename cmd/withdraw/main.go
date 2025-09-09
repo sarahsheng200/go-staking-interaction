@@ -2,50 +2,108 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"staking-interaction/adapter"
+	"staking-interaction/common/logger"
 	"staking-interaction/database"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
 
 func main() {
-	indexFlag := flag.String("index", "", "stake index")
+	log := logger.GetLogger().WithFields(map[string]interface{}{
+		"module": "cmd/withdraw",
+	})
+
+	indexFlag := flag.String("index", "", "质押索引（最小单位，如bigint）")
 	flag.Parse()
 
 	index, e := utils.StringToBigInt(*indexFlag)
 	if e != nil {
-		log.Fatal(e)
+		log.WithFields(map[string]interface{}{
+			"action": "parse_index",
+			"param":  "index",
+			"value":  *indexFlag,
+			"detail": e.Error(),
+		}).Error("Invalid index format")
+		return
 	}
 
 	err := database.MysqlConn()
 	if err != nil {
-		log.Fatal("MySQL database connect failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_db",
+			"error_code": "DB_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Error("MySQL database connect failed")
 		return
 	}
+	log.WithFields(map[string]interface{}{
+		"action": "init_db",
+		"detail": "MySQL database connected",
+	}).Info("Database connected")
+
 	defer func() {
 		err := database.CloseConn()
 		if err != nil {
-			log.Fatal("Close database failed: ", err)
+			log.WithFields(map[string]interface{}{
+				"action":     "close_db",
+				"error_code": "DB_CLOSE_FAIL",
+				"detail":     err.Error(),
+			}).Error("Close database failed")
+		} else {
+			log.WithFields(map[string]interface{}{
+				"action": "close_db",
+				"detail": "Database connection closed",
+			}).Info("Database connection closed")
 		}
 	}()
 
 	clientInfo, err := adapter.NewInitClient()
 	if err != nil {
-		log.Fatal("Init client failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_client",
+			"error_code": "CLIENT_INIT_FAIL",
+			"detail":     err.Error(),
+		}).Error("Init client failed")
+		return
 	}
-	defer clientInfo.CloseInitClient()
+	log.WithFields(map[string]interface{}{
+		"action": "init_client",
+		"detail": "Client initialized",
+	}).Info("Client initialized")
+	defer func() {
+		clientInfo.CloseInitClient()
+		log.WithFields(map[string]interface{}{
+			"action": "close_client",
+			"detail": "Client closed",
+		}).Info("Client closed")
+	}()
 
 	stakeService := service.NewStakeService(clientInfo)
-	response, err := stakeService.Withdraw(index)
+	log.WithFields(map[string]interface{}{
+		"action":  "init_service",
+		"service": "StakeService",
+		"detail":  "StakeService initialized",
+	}).Info("StakeService initialized")
 
+	response, err := stakeService.Withdraw(index)
 	if err != nil {
-		log.Fatal("Withdraw failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "withdraw",
+			"error_code": "WITHDRAW_FAIL",
+			"index":      index.String(),
+			"detail":     err.Error(),
+		}).Error("Withdraw failed")
+		return
 	}
-	fmt.Printf("withdraw success!\n")
-	fmt.Printf("Hash: %s \n", response.Hash)
-	fmt.Printf("ContractAddress: %s \n", response.ContractAddress)
-	fmt.Printf("FromAddress: %s \n", response.FromAddress.Hex())
-	fmt.Printf("Method: %s \n", response.Method)
+
+	log.WithFields(map[string]interface{}{
+		"action":        "withdraw",
+		"result":        "success",
+		"index":         index.String(),
+		"tx_hash":       response.Hash,
+		"contract_addr": response.ContractAddress,
+		"from_addr":     response.FromAddress.Hex(),
+		"method":        response.Method,
+	}).Info("Withdraw succeeded")
 }

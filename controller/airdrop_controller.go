@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"staking-interaction/adapter"
+	"staking-interaction/common/logger"
 	"staking-interaction/dto"
 	"staking-interaction/service"
 	"staking-interaction/utils"
@@ -25,6 +26,10 @@ func GenerateMultiWallets(c *gin.Context) {
 }
 
 func AirdropERC20(c *gin.Context) {
+	logger := logger.GetLogger()
+	logger.WithFields(map[string]interface{}{
+		"module": "controller/airdroperc",
+	})
 	var request dto.AirdropRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -58,7 +63,7 @@ func AirdropERC20(c *gin.Context) {
 		log.Fatalf("failed to generate random amounts: %v", err)
 	}
 
-	airdropService := service.NewAirdropService(client)
+	airdropService := service.NewAirdropService(client, logger)
 	responses, err := airdropService.AirdropERC20(reqCount, reqBatchSize, amountArray)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "Airdrop failed", "err": err.Error()})
@@ -68,6 +73,10 @@ func AirdropERC20(c *gin.Context) {
 }
 
 func AirdropBNB(c *gin.Context) {
+	logger := logger.GetLogger()
+	logger.WithFields(map[string]interface{}{
+		"module": "controller/airdropbnb",
+	})
 	var (
 		request dto.AirdropRequest
 	)
@@ -102,7 +111,7 @@ func AirdropBNB(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
 	}
-	airdropService := service.NewAirdropService(client)
+	airdropService := service.NewAirdropService(client, logger)
 	responses, err := airdropService.AirdropBNB(reqCount, reqBatchSize, amountArray)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"msg": "Airdrop failed", "err": err})

@@ -2,17 +2,21 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"math/big"
 	"os"
 	"staking-interaction/adapter"
+	"staking-interaction/common/logger"
 	"staking-interaction/database"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
 
 func main() {
+	log := logger.GetLogger()
+	log.WithFields(map[string]interface{}{
+		"module": "cmd/airdropbnb",
+	})
+
 	countFlag := flag.Int("count", 0, "airdroperc count")
 	batchSizeFlag := flag.Int("batchSize", 0, "batch size of airdroperc")
 	amountFlag := flag.String("amount", "", "amount range of airdroperc: 0-amount")
@@ -21,54 +25,102 @@ func main() {
 
 	// 验证必填参数
 	if *countFlag <= 0 {
-		log.Fatal("count should be greater than 0: -count")
+		log.WithFields(map[string]interface{}{
+			"action": "validate_input",
+			"param":  "count",
+			"value":  *countFlag,
+			"detail": "count should be greater than 0",
+		}).Fatal("Invalid argument: -count")
 	}
 	if *batchSizeFlag <= 0 {
-		log.Fatal("batchSize should be greater than 0: -batchSize")
+		log.WithFields(map[string]interface{}{
+			"action": "validate_input",
+			"param":  "batchSize",
+			"value":  *batchSizeFlag,
+			"detail": "batchSize should be greater than 0",
+		}).Fatal("Invalid argument: -batchSize")
 	}
 	maxAmount := new(big.Int)
 	if _, ok := maxAmount.SetString(*amountFlag, 10); !ok {
-		log.Fatalf("amount format is invalid: %s", *amountFlag)
+		log.WithFields(map[string]interface{}{
+			"action": "validate_input",
+			"param":  "amount",
+			"value":  *amountFlag,
+			"detail": "amount format is invalid",
+		}).Fatal("Invalid argument: -amount")
 	}
 
+	// 连接数据库
 	err := database.MysqlConn()
 	if err != nil {
-		log.Fatal("MySQL database connect failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_db",
+			"error_code": "DB_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("MySQL database connect failed")
 		return
 	}
+	log.WithFields(map[string]interface{}{
+		"action": "init_db",
+		"detail": "MySQL database connected",
+	}).Info("Database connected")
 	defer func() {
 		err := database.CloseConn()
 		if err != nil {
-			log.Fatal("Close database failed: ", err)
+			log.WithFields(map[string]interface{}{
+				"action":     "close_db",
+				"error_code": "DB_CLOSE_FAIL",
+				"detail":     err.Error(),
+			}).Error("Close database failed")
 		}
 	}()
 
 	clientInfo, err := adapter.NewInitClient()
 	if err != nil {
-		log.Fatal("Init client failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_client",
+			"error_code": "CLIENT_INIT_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Init client failed")
 	}
 	defer clientInfo.CloseInitClient()
 
 	amountArray, err := utils.GenerateRandomAmount(*countFlag, maxAmount)
 	if err != nil {
-		log.Fatalf("failed to generate random amounts: %v", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "generate_amount",
+			"error_code": "AMOUNT_GEN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Failed to generate random amounts")
 	}
 
-	airdropService := service.NewAirdropService(clientInfo)
+	airdropService := service.NewAirdropService(clientInfo, log)
 	response, err := airdropService.AirdropBNB(*countFlag, *batchSizeFlag, amountArray)
 	if err != nil {
-		log.Fatal("Airdrop ERC20 failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "airdrop_bnb",
+			"error_code": "AIRDROP_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Airdrop BNB failed")
 	}
 
 	// 输出结果
-	fmt.Printf("airdro bnb success!\n")
-	fmt.Printf("Msg: %s\n", response.Msg)
-	fmt.Printf("CompletedBatches: %d \n", response.CompletedBatches)
-	fmt.Printf("SuccessBatches: %d \n", response.SuccessBatches)
-	fmt.Printf("FailBatches: %d \n", response.FailBatches)
-	fmt.Printf("Data: %v \n", response.Data)
+	log.WithFields(map[string]interface{}{
+		"action":           "airdrop_bnb",
+		"result":           "success",
+		"Msg":              response.Msg,
+		"CompletedBatches": response.CompletedBatches,
+		"SuccessBatches":   response.SuccessBatches,
+		"FailBatches":      response.FailBatches,
+		"Data":             response.Data,
+	}).Info("Airdrop BNB succeeded")
+
 	if !utils.IsEmptyOrSpaceString(response.Error) {
-		fmt.Printf("Error: %s \n", response.Error)
+		log.WithFields(map[string]interface{}{
+			"action": "airdrop_bnb",
+			"result": "fail",
+			"detail": response.Error,
+		}).Error("Airdrop BNB error")
 	}
 
 	os.Exit(0)

@@ -2,51 +2,115 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"staking-interaction/adapter"
+	"staking-interaction/common/logger"
 	"staking-interaction/database"
 	"staking-interaction/service"
 )
 
 func main() {
+	log := logger.GetLogger().WithFields(map[string]interface{}{
+		"module": "cmd/stake",
+	})
+
 	amountFlag := flag.Int64("amount", 0, "质押金额（最小单位，如wei）")
 	periodFlag := flag.Uint("period", 0, "质押周期（天）")
 	flag.Parse()
+
 	// 验证必填参数
 	if *amountFlag <= 0 {
-		log.Fatal("amount should be greater than 0: -amount")
+		log.WithFields(map[string]interface{}{
+			"action": "validate_input",
+			"param":  "amount",
+			"value":  *amountFlag,
+			"detail": "amount should be greater than 0",
+		}).Fatal("Invalid argument: -amount")
 	}
 	if *periodFlag < 0 {
-		log.Fatal("period is invalid: -period")
+		log.WithFields(map[string]interface{}{
+			"action": "validate_input",
+			"param":  "period",
+			"value":  *periodFlag,
+			"detail": "period is invalid",
+		}).Fatal("Invalid argument: -period")
 	}
 
 	err := database.MysqlConn()
 	if err != nil {
-		log.Fatal("MySQL database connect failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_db",
+			"error_code": "DB_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("MySQL database connect failed")
 		return
 	}
+	log.WithFields(map[string]interface{}{
+		"action": "init_db",
+		"detail": "MySQL database connected",
+	}).Info("Database connected")
+
 	defer func() {
 		err := database.CloseConn()
 		if err != nil {
-			log.Fatal("Close database failed: ", err)
+			log.WithFields(map[string]interface{}{
+				"action":     "close_db",
+				"error_code": "DB_CLOSE_FAIL",
+				"detail":     err.Error(),
+			}).Error("Close database failed")
+		} else {
+			log.WithFields(map[string]interface{}{
+				"action": "close_db",
+				"detail": "Database connection closed",
+			}).Info("Database connection closed")
 		}
 	}()
 
 	clientInfo, err := adapter.NewInitClient()
 	if err != nil {
-		log.Fatal("Init client failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_client",
+			"error_code": "CLIENT_INIT_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Init client failed")
 	}
-	defer clientInfo.CloseInitClient()
+	log.WithFields(map[string]interface{}{
+		"action": "init_client",
+		"detail": "Client initialized",
+	}).Info("Client initialized")
+	defer func() {
+		clientInfo.CloseInitClient()
+		log.WithFields(map[string]interface{}{
+			"action": "close_client",
+			"detail": "Client closed",
+		}).Info("Client closed")
+	}()
 
 	stakeService := service.NewStakeService(clientInfo)
+	log.WithFields(map[string]interface{}{
+		"action":  "init_service",
+		"service": "StakeService",
+		"detail":  "StakeService initialized",
+	}).Info("StakeService initialized")
+
 	response, err := stakeService.Stake(*amountFlag, uint8(*periodFlag))
 	if err != nil {
-		log.Fatal("Stake failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "stake",
+			"error_code": "STAKE_FAIL",
+			"detail":     err.Error(),
+			"amount":     *amountFlag,
+			"period":     *periodFlag,
+		}).Fatal("Stake failed")
 	}
-	fmt.Printf("stake success!\n")
-	fmt.Printf("Hash: %s \n", response.Hash)
-	fmt.Printf("ContractAddress: %s \n", response.ContractAddress)
-	fmt.Printf("FromAddress: %s \n", response.FromAddress.Hex())
-	fmt.Printf("Method: %s \n", response.Method)
+
+	log.WithFields(map[string]interface{}{
+		"action":        "stake",
+		"result":        "success",
+		"amount":        *amountFlag,
+		"period":        *periodFlag,
+		"tx_hash":       response.Hash,
+		"contract_addr": response.ContractAddress,
+		"from_addr":     response.FromAddress.Hex(),
+		"method":        response.Method,
+	}).Info("Stake succeeded")
 }

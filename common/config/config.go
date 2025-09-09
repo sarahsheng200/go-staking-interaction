@@ -21,7 +21,6 @@ type Config struct {
 type AppConfig struct {
 	Environment string        `yaml:"environment"`
 	Debug       bool          `yaml:"debug"`
-	Name        string        `yaml:"name"`
 	Version     string        `yaml:"version"`
 	Host        string        `yaml:"host"`
 	Port        int           `yaml:"port"`
@@ -68,7 +67,7 @@ type RedisConfig struct {
 	IdleTimeout    time.Duration `yaml:"idle_timeout"`   // 空闲连接超时
 
 	// 锁配置
-	Locks map[string]LockConfig `yaml:"locks"`
+	Locks map[string]LockConfig `yaml:"lock"`
 }
 
 type LockConfig struct {

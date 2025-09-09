@@ -1,5 +1,11 @@
-environment: local
-debug: true
+app:
+  environment: local
+  debug: true
+  version: "0.0.1"
+  host: 127.0.0.1
+  port: 8084
+  log_level: "info"
+  timeout: 60s
 
 database:
   driver: mysql
@@ -27,7 +33,7 @@ redis:
   read_timeout: 3s
   write_timeout: 3s
   idle_timeout: 5m
-  lock:
+  locks:
     default_expiration: 10s
     default_timeout: 10s
     expirations:
@@ -71,9 +77,3 @@ blockchain:
       - "${OWNER4}"
       - "${OWNER5}"
 
-server:
-  host: "localhost"
-  port: 8084
-  read_timeout: 15s
-  write_timeout: 15s
-  idle_timeout: 60s

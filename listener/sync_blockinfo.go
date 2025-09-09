@@ -5,6 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/sirupsen/logrus"
 	"math/big"
 	"staking-interaction/common/config"
 	"staking-interaction/common/redis"
@@ -18,9 +22,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -37,7 +38,7 @@ type SyncBlockInfo struct {
 	// 添加配置和指标
 	config  *SyncConfig
 	metrics *SyncMetrics
-	//logger        *logrus.Logger
+	log     *logrus.Logger
 }
 
 type SyncConfig struct {
@@ -60,7 +61,7 @@ var conf = config.Get()
 var blockChainConf = conf.BlockchainConfig
 
 // NewSyncBlockInfo 创建新的区块同步服务
-func NewSyncBlockInfo(client *ethclient.Client, config *SyncConfig, lockManager *redis.LockManager) *SyncBlockInfo {
+func NewSyncBlockInfo(client *ethclient.Client, config *SyncConfig, lockManager *redis.LockManager, log *logrus.Logger) *SyncBlockInfo {
 	if config == nil {
 		config = &SyncConfig{
 			WorkerCount:     blockChainConf.Sync.Workers,
@@ -77,34 +78,58 @@ func NewSyncBlockInfo(client *ethclient.Client, config *SyncConfig, lockManager 
 		config:       config,
 		metrics:      &SyncMetrics{},
 		lockManager:  lockManager,
-		//logger:       logger,
+		log:          log,
 	}
 }
 
 // Start 启动区块同步
 func (s *SyncBlockInfo) Start() {
 	if !atomic.CompareAndSwapInt32(&s.isSyncRunning, 0, 1) {
-		fmt.Println("sync service is already running")
+		s.log.WithFields(logrus.Fields{
+			"module": "sync_block",
+			"action": "start",
+			"result": "already_running",
+		}).Warn("Sync service is already running")
 		return
 	}
-	fmt.Println("sync service is running...")
+	s.log.WithFields(logrus.Fields{
+		"module": "sync_block",
+		"action": "start",
+		"result": "running",
+	}).Info("Sync service is running...")
+
 	// 初始化起始区块
 	if err := s.initializeStartBlock(); err != nil {
-		fmt.Printf("initialize start block: %v\n", err)
+		s.log.WithFields(logrus.Fields{
+			"module":     "sync_block",
+			"action":     "init_start_block",
+			"error_code": "INIT_START_BLOCK_FAIL",
+			"detail":     err.Error(),
+		}).Error("Initialize start block failed")
 		return
 	}
 
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("initialize start block: %v\n", r)
+				s.log.WithFields(logrus.Fields{
+					"module":     "sync_block",
+					"action":     "init_start_block",
+					"error_code": "PANIC",
+					"detail":     r,
+				}).Error("Recovered from panic during start block initialization")
 				return
 			}
 		}()
 		s.syncLoop()
 	}()
 
-	fmt.Println("Sync service started successfully", "initial_done_block", s.getDoneBlock())
+	s.log.WithFields(logrus.Fields{
+		"module":             "sync_block",
+		"action":             "start",
+		"result":             "success",
+		"initial_done_block": s.getDoneBlock(),
+	}).Info("Sync service started successfully")
 }
 
 func (s *SyncBlockInfo) initializeStartBlock() error {
@@ -126,22 +151,27 @@ func (s *SyncBlockInfo) initializeStartBlock() error {
 // Stop 停止区块同步
 func (s *SyncBlockInfo) Stop() {
 	atomic.StoreInt32(&s.isSyncRunning, 0)
-	fmt.Println("Sync service stopping")
+	s.log.WithFields(logrus.Fields{
+		"module": "sync_block",
+		"action": "stop",
+	}).Info("Sync service stopping")
 
-	//s.loopWg.Wait()
 	s.workerWg.Wait()
-	fmt.Println("Sync service stopped")
+	s.log.WithFields(logrus.Fields{
+		"module": "sync_block",
+		"action": "stop",
+	}).Info("Sync service stopped")
 }
 
-// 同步循环
 func (s *SyncBlockInfo) syncLoop() {
-
-	fmt.Println("Starting block synchronization")
-	defer fmt.Println("Block synchronization stopped")
-
 	chainID, err := s.client.ChainID(context.Background())
 	if err != nil {
-		fmt.Println("failed to get chain ID: ", err)
+		s.log.WithFields(logrus.Fields{
+			"module":     "sync_block",
+			"action":     "get_chain_id",
+			"error_code": "CHAIN_ID_FAIL",
+			"detail":     err.Error(),
+		}).Error("Failed to get chain ID")
 		return
 	}
 
@@ -150,7 +180,13 @@ func (s *SyncBlockInfo) syncLoop() {
 
 		currentBlock, err := s.client.BlockNumber(blockCtx)
 		if err != nil {
-			fmt.Println("failed to get current block number: ", "lastSyncedBlock", s.getDoneBlock())
+			s.log.WithFields(logrus.Fields{
+				"module":            "sync_block",
+				"action":            "get_current_block",
+				"error_code":        "BLOCK_NUMBER_FAIL",
+				"last_synced_block": s.getDoneBlock(),
+				"detail":            err.Error(),
+			}).Warn("Failed to get current block number")
 			cancel()
 			time.Sleep(10 * time.Second)
 			continue
@@ -159,7 +195,12 @@ func (s *SyncBlockInfo) syncLoop() {
 		doneBlock := s.getDoneBlock()
 		// 控制同步距离，避免超前太多
 		if currentBlock < doneBlock+s.config.MaxBlocksBehind {
-			fmt.Println("Waiting for new blocks", "current", currentBlock, "done", doneBlock)
+			s.log.WithFields(logrus.Fields{
+				"module":        "sync_block",
+				"action":        "wait_new_block",
+				"current_block": currentBlock,
+				"done_block":    doneBlock,
+			}).Info("Waiting for new blocks")
 			cancel()
 			time.Sleep(10 * time.Second)
 			continue
@@ -167,7 +208,13 @@ func (s *SyncBlockInfo) syncLoop() {
 
 		// 处理当前区块
 		if err := s.processBlock(blockCtx, chainID, doneBlock); err != nil {
-			fmt.Println("Failed to process block", "block", doneBlock, "error", err)
+			s.log.WithFields(logrus.Fields{
+				"module":     "sync_block",
+				"action":     "process_block",
+				"block":      doneBlock,
+				"error_code": "PROCESS_BLOCK_FAIL",
+				"detail":     err.Error(),
+			}).Error("Failed to process block")
 			cancel()
 			// 处理区块错误时重试延迟加倍
 			time.Sleep(20 * time.Second)
@@ -179,9 +226,21 @@ func (s *SyncBlockInfo) syncLoop() {
 		s.setDoneBlock(newDoneBlock)
 		// 保存区块到文件中
 		if err := s.saveSyncedBlock(newDoneBlock); err != nil {
-			fmt.Println("Failed to save synced block", "block", newDoneBlock, "error", err)
+			s.log.WithFields(logrus.Fields{
+				"module":     "sync_block",
+				"action":     "save_synced_block",
+				"block":      newDoneBlock,
+				"error_code": "SAVE_BLOCK_FAIL",
+				"detail":     err.Error(),
+			}).Error("Failed to save synced block")
 		} else {
-			fmt.Println("Processed block", "block", doneBlock, "newDone", newDoneBlock)
+			s.log.WithFields(logrus.Fields{
+				"module":         "sync_block",
+				"action":         "save_synced_block",
+				"block":          doneBlock,
+				"new_done_block": newDoneBlock,
+				"result":         "success",
+			}).Info("Processed block")
 		}
 		cancel()
 	}
@@ -193,12 +252,31 @@ func (s *SyncBlockInfo) processBlock(blockCtx context.Context, chainID *big.Int,
 	block, err := s.client.BlockByNumber(blockCtx, big.NewInt(int64(blockNumber)))
 	if err != nil {
 		if errors.Is(err, ethereum.NotFound) {
+			s.log.WithFields(logrus.Fields{
+				"module":       "sync_block",
+				"action":       "get_block",
+				"block_number": blockNumber,
+				"error_code":   "BLOCK_NOT_FOUND",
+				"detail":       err.Error(),
+			}).Error("Block not found")
 			return fmt.Errorf("block %d not found: %w", blockNumber, err)
 		}
+		s.log.WithFields(logrus.Fields{
+			"module":       "sync_block",
+			"action":       "get_block",
+			"block_number": blockNumber,
+			"error_code":   "GET_BLOCK_FAIL",
+			"detail":       err.Error(),
+		}).Error("Get block failed")
 		return fmt.Errorf("get block failed: %w", err)
 	}
 
-	fmt.Println("Start processing block", "block_number", blockNumber, "transaction_count", len(block.Transactions()))
+	s.log.WithFields(logrus.Fields{
+		"module":            "sync_block",
+		"action":            "process_block_start",
+		"block_number":      blockNumber,
+		"transaction_count": len(block.Transactions()),
+	}).Info("Start processing block")
 
 	var txWg sync.WaitGroup
 	for _, tx := range block.Transactions() {
@@ -216,22 +294,36 @@ func (s *SyncBlockInfo) processBlock(blockCtx context.Context, chainID *big.Int,
 
 				// 捕获panic，防止单个交易处理崩溃整个服务
 				if r := recover(); r != nil {
-					fmt.Println("Recovered from panic in transaction processing",
-						"hash", tx.Hash().Hex(), "panic", r)
+					s.log.WithFields(logrus.Fields{
+						"module":  "sync_block",
+						"action":  "process_transaction_panic",
+						"tx_hash": tx.Hash().Hex(),
+						"panic":   r,
+					}).Error("Recovered from panic in transaction processing")
 				}
 			}()
 
 			if err := s.processTransaction(txCtx, chainID, tx); err != nil {
-				fmt.Println("Failed to process transaction",
-					"tx_hash", tx.Hash().Hex(),
-					"block_number", blockNum,
-					"error", err)
+				s.log.WithFields(logrus.Fields{
+					"module":       "sync_block",
+					"action":       "process_transaction",
+					"tx_hash":      tx.Hash().Hex(),
+					"block_number": blockNum,
+					"error_code":   "PROCESS_TRANSACTION_FAIL",
+					"detail":       err.Error(),
+				}).Error("Failed to process transaction")
 			}
 		}(tx, blockNumber)
 	}
 
 	txWg.Wait()
-	fmt.Println("Processed block success", "block_number", blockNumber, "transaction_count", len(block.Transactions()))
+	s.log.WithFields(logrus.Fields{
+		"module":            "sync_block",
+		"action":            "process_block_end",
+		"block_number":      blockNumber,
+		"transaction_count": len(block.Transactions()),
+		"result":            "success",
+	}).Info("Processed block success")
 	return nil
 }
 
@@ -245,20 +337,33 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 
 	// 跳过合约创建交易
 	if tx.To() == nil {
-		fmt.Println("Skipping contract creation transaction", "hash", tx.Hash().Hex())
+		s.log.WithFields(logrus.Fields{
+			"module":  "sync_block",
+			"action":  "skip_contract_creation",
+			"tx_hash": tx.Hash().Hex(),
+		}).Info("Skipping contract creation transaction")
 		return nil
 	}
 
 	toAddr := *tx.To()
 	// 检查接收地址是否为平台地址
 	if !isToAddrValid(toAddr) {
-		fmt.Println("Transaction not to our address", "hash", tx.Hash().Hex(), "to", toAddr.Hex())
+		s.log.WithFields(logrus.Fields{
+			"module":     "sync_block",
+			"action":     "skip_not_to_our_address",
+			"tx_hash":    tx.Hash().Hex(),
+			"to_address": toAddr.Hex(),
+		}).Info("Transaction not to our address")
 		return nil
 	}
 
 	// 只处理成功的交易
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		fmt.Println("Skipping failed transaction", "hash", tx.Hash().Hex())
+		s.log.WithFields(logrus.Fields{
+			"module":  "sync_block",
+			"action":  "skip_failed_transaction",
+			"tx_hash": tx.Hash().Hex(),
+		}).Info("Skipping failed transaction")
 		return nil
 	}
 
@@ -272,7 +377,12 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 	// 检查发送者是否为平台用户
 	isValidAccount, accountId := isValidAccount(fromAddr)
 	if !isValidAccount {
-		fmt.Println("Sender is not our customer", "hash", tx.Hash().Hex(), "from", fromAddr.Hex())
+		s.log.WithFields(logrus.Fields{
+			"module":       "sync_block",
+			"action":       "skip_not_customer",
+			"tx_hash":      tx.Hash().Hex(),
+			"from_address": fromAddr.Hex(),
+		}).Info("Sender is not our customer")
 		return nil
 	}
 
@@ -298,7 +408,11 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 		)
 	}
 
-	fmt.Println("Unsupported transaction type", "hash", tx.Hash().Hex())
+	s.log.WithFields(logrus.Fields{
+		"module":  "sync_block",
+		"action":  "unsupported_tx_type",
+		"tx_hash": tx.Hash().Hex(),
+	}).Warn("Unsupported transaction type")
 	return nil
 }
 
@@ -323,11 +437,24 @@ func (s *SyncBlockInfo) handleTokenTransaction(
 		defer unlockCancel()
 
 		if err := assetLock.Unlock(unlockCtx); err != nil {
-			fmt.Printf("unlock assetLock failed: %w ,accountid:%d, tx_hash:%s\n", err, accountId, tx.Hash().Hex())
+			s.log.WithFields(logrus.Fields{
+				"module":     "sync_block",
+				"action":     "unlock_asset",
+				"tx_hash":    tx.Hash().Hex(),
+				"account_id": accountId,
+				"error_code": "UNLOCK_FAIL",
+				"detail":     err.Error(),
+			}).Error("Unlock assetLock failed")
 		} else {
-			fmt.Printf("lock relase success, tx_hash:%s, blocknumber:%d\n", tx.Hash().Hex(), receipt.BlockNumber.Int64())
+			s.log.WithFields(logrus.Fields{
+				"module":       "sync_block",
+				"action":       "unlock_asset",
+				"tx_hash":      tx.Hash().Hex(),
+				"block_number": receipt.BlockNumber.Int64(),
+				"account_id":   accountId,
+				"result":       "success",
+			}).Info("Asset lock released successfully")
 		}
-
 	}()
 
 	return s.executeTransactionWithLock(receipt, accountId, fromAddr, toAddr, amount, tokenType)
@@ -397,15 +524,17 @@ func (s *SyncBlockInfo) executeTransactionWithLock(
 			return fmt.Errorf("update asset: %w", err)
 		}
 
-		fmt.Println("Successfully processed transaction",
-			"hash", hash,
-			"accountId", accountId,
-			"tokenType", tokenType,
-			"amount", amount.String())
+		s.log.WithFields(logrus.Fields{
+			"module":     "sync_block",
+			"action":     "process_transaction_success",
+			"hash":       hash,
+			"account_id": accountId,
+			"token_type": tokenType,
+			"amount":     amount.String(),
+		}).Info("Successfully processed transaction")
 		return nil
 	})
 }
-
 func (s *SyncBlockInfo) calculateBalance(tokenType int, asset *model.AccountAsset, amount *big.Int) (string, string, error) {
 	var preBalanceStr string
 	var err error

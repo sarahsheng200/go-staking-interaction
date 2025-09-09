@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"staking-interaction/adapter"
+	"staking-interaction/common/logger"
 	redisClient "staking-interaction/common/redis"
 	"staking-interaction/database"
 	"staking-interaction/listener"
@@ -13,96 +13,164 @@ import (
 )
 
 func main() {
+	log := logger.GetLogger()
+	log.WithFields(map[string]interface{}{
+		"module": "cmd/syncblock",
+	})
+
 	// 1. 初始化数据库
 	err := database.MysqlConn()
 	if err != nil {
-		log.Fatal("MySQL database connect failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_db",
+			"error_code": "DB_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("MySQL database connect failed")
 		return
 	}
+
 	defer func() {
 		err := database.CloseConn()
 		if err != nil {
-			log.Fatal("Close database failed: ", err)
+			log.WithFields(map[string]interface{}{
+				"action":     "close_db",
+				"error_code": "DB_CLOSE_FAIL",
+				"detail":     err.Error(),
+			}).Error("Close database failed")
 		}
 	}()
 
 	// 2. 初始化 Redis 连接
 	redis, err := redisClient.NewRedisClientWithRetry()
 	if err != nil {
-		log.Fatal("Redis connection failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_redis",
+			"error_code": "REDIS_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Redis connection failed")
 	}
 	defer redis.Close()
 
 	// 3. 创建 LockManager 实例
 	lockManager := redisClient.NewLockManager(redis)
-	log.Println("LockManager initialized successfully")
+	log.WithFields(map[string]interface{}{
+		"action": "init_lock_manager",
+		"detail": "LockManager initialized successfully",
+	}).Info("LockManager initialized")
 
 	// 4. 初始化区块链客户端
 	clientInfo, err := adapter.NewInitClient()
 	if err != nil {
-		log.Fatal("Init client failed: ", err)
+		log.WithFields(map[string]interface{}{
+			"action":     "init_client",
+			"error_code": "CLIENT_INIT_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Init client failed")
 	}
+
 	// 5. syncBlock
-	log.Println("Initializing sync block...")
-	syncBlock := listener.NewSyncBlockInfo(clientInfo.Client, nil, lockManager)
+	log.WithFields(map[string]interface{}{
+		"action": "init_sync_block",
+		"detail": "Initializing sync block",
+	}).Info("Initializing sync block...")
+	syncBlock := listener.NewSyncBlockInfo(clientInfo.Client, nil, lockManager, log)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("SyncBlockInfo panic: %v", r)
+				log.WithFields(map[string]interface{}{
+					"action": "sync_block_panic",
+					"detail": r,
+				}).Error("SyncBlockInfo panic")
 			}
 		}()
-		log.Println("SyncBlockInfo goroutine started")
+		log.WithFields(map[string]interface{}{
+			"action": "sync_block_start",
+			"detail": "SyncBlockInfo goroutine started",
+		}).Info("SyncBlockInfo goroutine started")
 		syncBlock.Start()
-		log.Println("SyncBlockInfo goroutine ended")
 	}()
 	defer func() {
-		log.Println("Stopping SyncBlockInfo...")
+		log.WithFields(map[string]interface{}{
+			"action": "sync_block_stop",
+			"detail": "Stopping SyncBlockInfo",
+		}).Info("Stopping SyncBlockInfo...")
 		syncBlock.Stop()
 	}()
 
 	// 6. withdraw handler
-	log.Println("Initializing withdraw handler...")
+	log.WithFields(map[string]interface{}{
+		"action": "init_withdraw_handler",
+		"detail": "Initializing withdraw handler",
+	}).Info("Initializing withdraw handler...")
 	txService := service.NewTransactionService(clientInfo)
-	withdrawHd := listener.NewWithdrawHandler(txService, lockManager)
+	withdrawHd := listener.NewWithdrawHandler(txService, lockManager, log)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("WithdrawHandler panic: %v", r)
+				log.WithFields(map[string]interface{}{
+					"action": "withdraw_handler_panic",
+					"detail": r,
+				}).Error("WithdrawHandler panic")
 			}
 		}()
-		log.Println("WithdrawHandler goroutine started")
+		log.WithFields(map[string]interface{}{
+			"action": "withdraw_handler_start",
+			"detail": "WithdrawHandler goroutine started",
+		}).Info("WithdrawHandler goroutine started")
 		withdrawHd.Start()
-		log.Println("WithdrawHandler goroutine ended")
 	}()
 	defer func() {
-		log.Println(" Stopping WithdrawHandler...")
+		log.WithFields(map[string]interface{}{
+			"action": "withdraw_handler_stop",
+			"detail": "Stopping WithdrawHandler",
+		}).Info("Stopping WithdrawHandler...")
 		withdrawHd.Stop()
 	}()
 
 	// 7. sync withdraw
-	log.Println("Initializing sync withdraw...")
-	syncWithdraw := listener.NewSyncWithdrawHandler(clientInfo.Client, lockManager)
+	log.WithFields(map[string]interface{}{
+		"action": "init_sync_withdraw",
+		"detail": "Initializing sync withdraw",
+	}).Info("Initializing sync withdraw...")
+	syncWithdraw := listener.NewSyncWithdrawHandler(clientInfo.Client, lockManager, log)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("SyncWithdrawHandler panic: %v", r)
+				log.WithFields(map[string]interface{}{
+					"action": "sync_withdraw_panic",
+					"detail": r,
+				}).Error("SyncWithdrawHandler panic")
 			}
 		}()
-		log.Println("SyncWithdrawHandler goroutine started")
+		log.WithFields(map[string]interface{}{
+			"action": "sync_withdraw_start",
+			"detail": "SyncWithdrawHandler goroutine started",
+		}).Info("SyncWithdrawHandler goroutine started")
 		syncWithdraw.Start()
-		log.Println("SyncWithdrawHandler goroutine ended")
 	}()
 	defer func() {
-		log.Println("Stopping SyncWithdrawHandler...")
+		log.WithFields(map[string]interface{}{
+			"action": "sync_withdraw_stop",
+			"detail": "Stopping SyncWithdrawHandler",
+		}).Info("Stopping SyncWithdrawHandler...")
 		syncWithdraw.Stop()
 	}()
 
-	log.Println("SyncWithdrawHandler launched, all services initialized!")
+	log.WithFields(map[string]interface{}{
+		"action": "service_initialized",
+		"detail": "SyncWithdrawHandler launched, all services initialized",
+	}).Info("Services initialized")
 
 	// 8. 等待关闭信号
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	log.WithFields(map[string]interface{}{
+		"action": "wait_signal",
+		"detail": "Waiting for shutdown signal",
+	}).Info("Waiting for shutdown signal...")
 	<-signalChan
-	log.Println("shutdown signal received, exiting...")
-
+	log.WithFields(map[string]interface{}{
+		"action": "shutdown",
+		"detail": "Shutdown signal received, exiting",
+	}).Info("Shutdown signal received, exiting...")
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/sirupsen/logrus"
 	"math/big"
 	"staking-interaction/adapter"
 	"staking-interaction/common/config"
@@ -19,13 +20,16 @@ import (
 
 type AirdropService struct {
 	clientInfo *adapter.InitClient
+	log        *logrus.Logger
 }
 
 func NewAirdropService(
 	clientInfo *adapter.InitClient,
+	log *logrus.Logger,
 ) *AirdropService {
 	return &AirdropService{
 		clientInfo: clientInfo,
+		log:        logrus.New(),
 	}
 }
 
@@ -50,7 +54,11 @@ func (s *AirdropService) AirdropERC20(reqCount int, reqBatchSize int, reqAmount 
 		mu        sync.Mutex // 保护response切片的并发写入
 		responses []dto.AirdropInfo
 	)
-	fmt.Println("Airdrop contract init---", s.clientInfo.FromAddress)
+	s.log.WithFields(map[string]interface{}{
+		"service":      "airdrop",
+		"from address": s.clientInfo.FromAddress,
+	}).Info("airdropERC20 init success")
+
 	contract, err := s.NewAirdropContract()
 	if err != nil {
 		return nil, fmt.Errorf("new contract failed: %v", err)
@@ -173,7 +181,12 @@ func (s *AirdropService) AirdropBNB(reqCount int, reqBatchSize int, reqAmount []
 		wg        sync.WaitGroup
 		mu        sync.Mutex // 保护response切片的并发写入
 	)
-	fmt.Println("Airdrop contract init---", s.clientInfo.FromAddress)
+
+	s.log.WithFields(map[string]interface{}{
+		"service":      "airdrop",
+		"from address": s.clientInfo.FromAddress,
+	}).Info("AirdropBNB init success")
+
 	contract, err := s.NewAirdropContract()
 	if err != nil {
 		return nil, fmt.Errorf("new contract failed: %v", err)

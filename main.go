@@ -3,40 +3,69 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"github.com/sirupsen/logrus"
 	_ "math/big"
 	"net/http"
 	"os"
 	"os/signal"
 	"staking-interaction/adapter"
+	"staking-interaction/common/config"
+	"staking-interaction/common/logger"
 	"staking-interaction/database"
 	srouter "staking-interaction/router"
 	"syscall"
 	"time"
 )
 
-const PORT = 8084
-
 func main() {
+	conf := config.Get()
+	logger.InitLogger(logrus.InfoLevel, true)
+	log := logger.GetLogger().WithFields(logrus.Fields{
+		"module": "main",                     // 主模块名
+		"env":    conf.AppConfig.Environment, // 环境
+		"pid":    os.Getpid(),                // 进程号
+	})
 
 	err := database.MysqlConn()
 	if err != nil {
-		log.Fatal("MySQL database connect failed: ", err)
+		log.WithFields(logrus.Fields{
+			"action":     "init_db",
+			"error_code": "DB_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("MySQL database connect failed")
 		return
 	}
+	log.WithFields(logrus.Fields{
+		"action": "init_db",
+	}).Info("MySQL database connected.")
+
 	defer func() {
 		err := database.CloseConn()
 		if err != nil {
-			log.Fatal("Close database failed: ", err)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"action":     "close_db",
+					"error_code": "DB_CLOSE_FAIL",
+					"detail":     err.Error(),
+				}).Error("Close database failed")
+			} else {
+				log.WithFields(logrus.Fields{
+					"action": "close_db",
+				}).Info("Database connection closed")
+			}
 		}
 	}()
 
 	router := srouter.InitRouter()
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", PORT),
+		Addr:    fmt.Sprintf(":%d", conf.AppConfig.Port),
 		Handler: router,
 	}
-	log.Println(fmt.Sprintf("Listening and serving HTTP on Port: %d, Pid: %d", PORT, os.Getpid()))
+	log.WithFields(logrus.Fields{
+		"action": "listen",
+		"port":   conf.AppConfig.Port,
+		"detail": "server ready",
+	}).Info("Listening and serving HTTP.")
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -45,7 +74,11 @@ func main() {
 	}()
 	clientInfo, err := adapter.NewInitClient()
 	if err != nil {
-		log.Fatal("Init client failed: ", err)
+		log.WithFields(logrus.Fields{
+			"action":     "serve_http",
+			"error_code": "HTTP_SERVE_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Error starting server")
 	}
 	defer clientInfo.CloseInitClient()
 	//listener.ListenToEvents()
@@ -63,7 +96,14 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("server shutdown:", err)
+		log.WithFields(logrus.Fields{
+			"action":     "shutdown_http",
+			"error_code": "HTTP_SHUTDOWN_FAIL",
+			"detail":     err.Error(),
+		}).Error("Server shutdown error")
 	}
-	log.Printf("server exiting...")
+	log.WithFields(logrus.Fields{
+		"action": "exit",
+		"detail": "Server exiting",
+	}).Info("Server exiting")
 }

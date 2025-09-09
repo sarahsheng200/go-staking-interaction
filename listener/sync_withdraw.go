@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/sirupsen/logrus"
 	"math/big"
 	"staking-interaction/common/config"
 	"staking-interaction/common/redis"
@@ -21,14 +22,16 @@ type SyncWithdrawHandler struct {
 	client                   *ethclient.Client
 	isWithDrawHandlerRunning int32
 	lockManager              *redis.LockManager
+	log                      *logrus.Logger
 }
 
 var withdrawConf = config.Get().BlockchainConfig
 
-func NewSyncWithdrawHandler(client *ethclient.Client, lockManager *redis.LockManager) *SyncWithdrawHandler {
+func NewSyncWithdrawHandler(client *ethclient.Client, lockManager *redis.LockManager, log *logrus.Logger) *SyncWithdrawHandler {
 	return &SyncWithdrawHandler{
 		client:      client,
 		lockManager: lockManager,
+		log:         log,
 	}
 }
 
@@ -39,29 +42,48 @@ func (s *SyncWithdrawHandler) Start() {
 
 func (s *SyncWithdrawHandler) Stop() {
 	atomic.StoreInt32(&s.isWithDrawHandlerRunning, 0)
-	fmt.Println("stop SyncWithdrawHandler...")
+	s.log.WithFields(logrus.Fields{
+		"module": "sync_withdraw",
+		"action": "service_stopping",
+	}).Info("Service stopping, SyncWithdrawHandler")
 }
 
 func (s *SyncWithdrawHandler) syncWithdraw() {
 	for atomic.LoadInt32(&s.isWithDrawHandlerRunning) == 1 {
 		withDrawList, err := repository.GetWithdrawalInfoByStatus(config.WithdrawStatusPending)
 		if err != nil {
-			fmt.Printf("SyncWithdrawHandler: GetWithdrawInfo failed: %v\n", err)
+			s.log.WithFields(logrus.Fields{
+				"module":     "sync_withdraw",
+				"action":     "GetWithdrawInfo",
+				"error_code": "GET_WITHDRAW_FAIL",
+				"detail":     err.Error(),
+			}).Error("GetWithdrawInfo  error")
 			continue
+
 		}
 		for _, withdrawInfo := range withDrawList {
 			err := s.processWithdraw(withdrawInfo)
 			if err != nil {
-				fmt.Printf("SyncWithdrawHandler: processWithdraw failed: %v\n", err)
+				s.log.WithFields(logrus.Fields{
+					"module":      "sync_withdraw",
+					"action":      "processWithdraw",
+					"withdraw_id": withdrawInfo.ID,
+					"error_code":  "PARSE_WITHDRAW_FAIL",
+					"detail":      err.Error(),
+				}).Error("Process withdraw error")
 			}
-			fmt.Println("success processWithdraw")
+			s.log.WithFields(logrus.Fields{
+				"module":         "sync_withdraw",
+				"action":         "processWithdraw",
+				"wallet_address": withdrawInfo.WalletAddress,
+				"result":         "success",
+			}).Info("processWithdraw successfully")
 		}
 		time.Sleep(5 * time.Second)
 	}
 }
 
 func (s *SyncWithdrawHandler) processWithdraw(withdrawInfo model.Withdrawal) error {
-	fmt.Println("withdrawInfo.Hash:", withdrawInfo.Hash)
 	hash := common.HexToHash(withdrawInfo.Hash)
 	ctx, cancel := context.WithTimeout(context.Background(), withdrawConf.Sync.SyncInterval)
 	defer cancel()
@@ -121,7 +143,12 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 		fmt.Printf("lock  releasing: blocknumber:%s, tx_hash:%s\n", receipt.BlockNumber.String(), withdrawInfo.Hash)
 	}()
 
+	return s.handleWithdrawTransaction(ctx, receipt, withdrawInfo, account.AccountID, amount)
+}
+
+func (s *SyncWithdrawHandler) handleWithdrawTransaction(ctx context.Context, receipt *types.Receipt, withdrawInfo model.Withdrawal, accountID int, amount *big.Int) error {
 	return repository.SwWithTransaction(func(wd *repository.SwRepo) error {
+		// 检查交易是否成功
 		if receipt.Status != types.ReceiptStatusSuccessful {
 			withdrawInfo.Status = config.WithdrawStatusFailed
 			if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
@@ -130,11 +157,13 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 			return fmt.Errorf("SyncWithdrawHandler: GetTransactionReceipt failed id: %d, hash:%s\n", withdrawInfo.ID, withdrawInfo.Hash)
 		}
 
+		// 更新提现状态为"成功"
 		withdrawInfo.Status = config.WithdrawStatusSuccess
 		if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
 			return fmt.Errorf("SyncWithdrawHandler: UpdateWithdrawInfo failed: %v, withdrawid:%d\n", err, withdrawInfo.ID)
 		}
 
+		// 检查区块确认数是否足够
 		blockNumber := receipt.BlockNumber
 		currentHeight, err := s.client.BlockNumber(ctx)
 		if err != nil {
@@ -144,40 +173,52 @@ func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withd
 		if big.NewInt(int64(currentHeight)).Cmp(expectBlockNumber) < 0 { //current height< block number+30
 			return fmt.Errorf("SyncWithdrawHandler: current block height is not enough, currentHeight: %d, receipt block number:%d \n", currentHeight, blockNumber)
 		}
-		// add bill info
-		asset, err := wd.GetAssetByAccountIdWithLock(account.AccountID)
+
+		// 处理资产扣减和账单记录
+		asset, err := wd.GetAssetByAccountIdWithLock(accountID)
 		if err != nil {
-			return fmt.Errorf("SyncWithdrawHandler: GetAccountAsset failed: %v, accountid:%d\n", err, account.AccountID)
+			return fmt.Errorf("SyncWithdrawHandler: GetAccountAsset failed: %v, accountid:%d\n", err, accountID)
 		}
-		var pre string
+
+		// 检查余额是否充足
+		var preBalanceStr string
 		switch withdrawInfo.TokenType {
 		case config.TokenTypeBNB:
-			pre = asset.BnbBalance
+			preBalanceStr = asset.BnbBalance
 		case config.TokenTypeMTK:
-			pre = asset.MtkBalance
+			preBalanceStr = asset.MtkBalance
 		}
-		preBalance, err := utils.StringToBigInt(pre)
+		preBalance, err := utils.StringToBigInt(preBalanceStr)
 		if err != nil {
-			return fmt.Errorf("SyncWithdrawHandler: preBalance parse failed: %v, preBalance:%s\n", err, pre)
+			return fmt.Errorf("SyncWithdrawHandler: preBalance parse failed: %v, preBalance:%s\n", err, preBalanceStr)
 		}
 		if preBalance.Cmp(amount) == -1 {
 			return fmt.Errorf("SyncWithdrawHandler: balance is not enough, preBalance:%s, txamount:%s\n", preBalance, withdrawInfo.Amount)
 		}
+
+		// 计算nextBalance
 		nextBalance := new(big.Int).Sub(preBalance, amount)
+
+		// 创建提现账单记录
 		bill := model.Bill{
-			AccountID:   account.AccountID,
+			AccountID:   accountID,
 			TokenType:   withdrawInfo.TokenType,
 			BillType:    config.BillTypeWithdrawal,
 			Amount:      amount.String(),
 			Fee:         strconv.FormatUint(receipt.GasUsed, 10),
-			PreBalance:  pre,
+			PreBalance:  preBalanceStr,
 			NextBalance: nextBalance.String(),
 		}
 		if err := wd.AddBill(&bill); err != nil {
 			return fmt.Errorf("AddBill failed: %w", err)
 		}
-		fmt.Println("update bill success")
+		s.log.WithFields(logrus.Fields{
+			"module": "sync_withdraw",
+			"action": "handleWithdrawTransaction",
+			"result": "success",
+		}).Info("update bill successfully")
 
+		// 使用乐观锁更新账户资产余额
 		if err := wd.UpdateAssetWithOptimisticLock(asset, nextBalance.String(), withdrawInfo.TokenType); err != nil {
 			return fmt.Errorf("update asset: %w", err)
 		}

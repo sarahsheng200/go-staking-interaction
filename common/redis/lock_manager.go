@@ -144,8 +144,6 @@ func (dl *DistributedLock) Lock(ctx context.Context, timeout time.Duration) erro
 	return fmt.Errorf("lock timeout")
 }
 
-// 便捷方法：直接获取并加锁
-
 // Unlock 释放锁（使用 Lua 脚本确保原子性）
 func (dl *DistributedLock) Unlock(ctx context.Context) error {
 	script := `
