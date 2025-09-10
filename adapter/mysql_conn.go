@@ -1,4 +1,4 @@
-package database
+package adapter
 
 import (
 	"gorm.io/driver/mysql"

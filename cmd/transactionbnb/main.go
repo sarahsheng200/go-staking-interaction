@@ -3,8 +3,7 @@ package main
 import (
 	"flag"
 	"staking-interaction/adapter"
-	"staking-interaction/common/logger"
-	"staking-interaction/database"
+	"staking-interaction/middleware/logger"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
@@ -29,7 +28,7 @@ func main() {
 		return
 	}
 
-	err := database.MysqlConn()
+	err := adapter.MysqlConn()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_db",
@@ -40,7 +39,7 @@ func main() {
 	}
 
 	defer func() {
-		err := database.CloseConn()
+		err := adapter.CloseConn()
 		if err != nil {
 			log.WithFields(map[string]interface{}{
 				"action":     "close_db",
@@ -50,7 +49,7 @@ func main() {
 		}
 	}()
 
-	clientInfo, err := adapter.NewInitClient()
+	clientInfo, err := adapter.NewInitEthClient()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_client",
@@ -59,7 +58,7 @@ func main() {
 		}).Error("Init client failed")
 		return
 	}
-	defer clientInfo.CloseInitClient()
+	defer clientInfo.CloseEthClient()
 
 	transactionService := service.NewTransactionService(clientInfo)
 	response, err := transactionService.SendBNB(*toAddressFlag, amount)

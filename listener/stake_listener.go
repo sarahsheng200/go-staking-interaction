@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
 	"math/big"
+	"staking-interaction/adapter"
 	"staking-interaction/common/config"
 	stakeContract "staking-interaction/contracts/stake"
 	"staking-interaction/dto"
@@ -26,11 +27,12 @@ var (
 
 func ListenToEvents() {
 	conf := config.Get()
-	client, err := ethclient.Dial(conf.BlockchainConfig.RpcURL)
+	clientInfo, err := adapter.NewSyncEthClient()
 	if err != nil {
 		log.Fatalf("ListenToStakedEvent: Failed to connect to the BSC network: %v", err)
 	}
-	defer client.Close()
+	defer clientInfo.CloseSyncEthClient()
+	client := clientInfo.Client
 
 	contractAddress := common.HexToAddress(conf.BlockchainConfig.Contracts.Stake)
 

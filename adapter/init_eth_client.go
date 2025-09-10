@@ -20,7 +20,7 @@ type InitClient struct {
 	ChainID     *big.Int
 }
 
-func NewInitClient() (*InitClient, error) {
+func NewInitEthClient() (*InitClient, error) {
 	cfg := config.Get()
 	// 初始化客户端
 	ethClient, err := ethclient.Dial(cfg.BlockchainConfig.RawURL)
@@ -62,6 +62,30 @@ func NewInitClient() (*InitClient, error) {
 	}, nil
 }
 
-func (c *InitClient) CloseInitClient() {
+func (c *InitClient) CloseEthClient() {
+	c.Client.Close()
+}
+
+func NewSyncEthClient() (*InitClient, error) {
+	cfg := config.Get()
+	// 初始化客户端
+	ethClient, err := ethclient.Dial(cfg.BlockchainConfig.RpcURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to the stake contract: %v", err)
+	}
+
+	// 获取链ID
+	chainID, err := ethClient.ChainID(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %v", err)
+	}
+
+	return &InitClient{
+		Client:  ethClient,
+		ChainID: chainID,
+	}, nil
+}
+
+func (c *InitClient) CloseSyncEthClient() {
 	c.Client.Close()
 }

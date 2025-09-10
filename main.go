@@ -10,8 +10,7 @@ import (
 	"os/signal"
 	"staking-interaction/adapter"
 	"staking-interaction/common/config"
-	"staking-interaction/common/logger"
-	"staking-interaction/database"
+	"staking-interaction/middleware/logger"
 	srouter "staking-interaction/router"
 	"syscall"
 	"time"
@@ -26,7 +25,7 @@ func main() {
 		"pid":    os.Getpid(),                // 进程号
 	})
 
-	err := database.MysqlConn()
+	err := adapter.MysqlConn()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"action":     "init_db",
@@ -40,7 +39,7 @@ func main() {
 	}).Info("MySQL database connected.")
 
 	defer func() {
-		err := database.CloseConn()
+		err := adapter.CloseConn()
 		if err != nil {
 			if err != nil {
 				log.WithFields(logrus.Fields{
@@ -72,7 +71,7 @@ func main() {
 			log.Fatal("Error starting server :", err)
 		}
 	}()
-	clientInfo, err := adapter.NewInitClient()
+	clientInfo, err := adapter.NewInitEthClient()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"action":     "serve_http",
@@ -80,7 +79,7 @@ func main() {
 			"detail":     err.Error(),
 		}).Fatal("Error starting server")
 	}
-	defer clientInfo.CloseInitClient()
+	defer clientInfo.CloseEthClient()
 	//listener.ListenToEvents()
 
 	// 创建系统信号接收器

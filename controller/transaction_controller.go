@@ -19,7 +19,7 @@ func SendErc20(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	client, err := adapter.NewInitClient()
+	client, err := adapter.NewInitEthClient()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
@@ -44,7 +44,7 @@ func SendBNB(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	client, err := adapter.NewInitClient()
+	client, err := adapter.NewInitEthClient()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return

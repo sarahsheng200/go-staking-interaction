@@ -2,18 +2,18 @@ package repository
 
 import (
 	"log"
-	"staking-interaction/database"
+	"staking-interaction/adapter"
 	"staking-interaction/model"
 )
 
 func AddStakeInfo(stake model.Stake) {
-	database.DB.Create(&stake)
+	adapter.DB.Create(&stake)
 
 	log.Printf("Add " + stake.Method + " info to database success, indexId: " + stake.IndexNum)
 }
 
 func GetAllStakesByFromAddress(fromAddress string) model.Stake {
 	var stake model.Stake
-	database.DB.Where("from_address = ?", fromAddress).First(&stake)
+	adapter.DB.Where("from_address = ?", fromAddress).First(&stake)
 	return stake
 }

@@ -4,10 +4,10 @@ import (
 	"os"
 	"os/signal"
 	"staking-interaction/adapter"
-	"staking-interaction/common/logger"
+	"staking-interaction/common/config"
 	redisClient "staking-interaction/common/redis"
-	"staking-interaction/database"
 	"staking-interaction/listener"
+	"staking-interaction/middleware/logger"
 	"staking-interaction/service"
 	"syscall"
 )
@@ -17,9 +17,10 @@ func main() {
 	log.WithFields(map[string]interface{}{
 		"module": "cmd/syncblock",
 	})
+	conf := config.Get()
 
 	// 1. 初始化数据库
-	err := database.MysqlConn()
+	err := adapter.MysqlConn()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_db",
@@ -30,7 +31,7 @@ func main() {
 	}
 
 	defer func() {
-		err := database.CloseConn()
+		err := adapter.CloseConn()
 		if err != nil {
 			log.WithFields(map[string]interface{}{
 				"action":     "close_db",
@@ -41,7 +42,7 @@ func main() {
 	}()
 
 	// 2. 初始化 Redis 连接
-	redis, err := redisClient.NewRedisClientWithRetry()
+	redis, err := adapter.NewRedisClientWithRetry()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_redis",
@@ -59,7 +60,7 @@ func main() {
 	}).Info("LockManager initialized")
 
 	// 4. 初始化区块链客户端
-	clientInfo, err := adapter.NewInitClient()
+	clientInfo, err := adapter.NewSyncEthClient()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_client",
@@ -67,13 +68,14 @@ func main() {
 			"detail":     err.Error(),
 		}).Fatal("Init client failed")
 	}
+	defer clientInfo.CloseSyncEthClient()
 
 	// 5. syncBlock
 	log.WithFields(map[string]interface{}{
 		"action": "init_sync_block",
 		"detail": "Initializing sync block",
 	}).Info("Initializing sync block...")
-	syncBlock := listener.NewSyncBlockInfo(clientInfo.Client, nil, lockManager, log)
+	syncBlock := listener.NewSyncBlockInfo(clientInfo, conf.BlockchainConfig, lockManager, log)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {

@@ -3,8 +3,7 @@ package main
 import (
 	"flag"
 	"staking-interaction/adapter"
-	"staking-interaction/common/logger"
-	"staking-interaction/database"
+	"staking-interaction/middleware/logger"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
@@ -28,7 +27,7 @@ func main() {
 		return
 	}
 
-	err := database.MysqlConn()
+	err := adapter.MysqlConn()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_db",
@@ -43,7 +42,7 @@ func main() {
 	}).Info("Database connected")
 
 	defer func() {
-		err := database.CloseConn()
+		err := adapter.CloseConn()
 		if err != nil {
 			log.WithFields(map[string]interface{}{
 				"action":     "close_db",
@@ -58,7 +57,7 @@ func main() {
 		}
 	}()
 
-	clientInfo, err := adapter.NewInitClient()
+	clientInfo, err := adapter.NewInitEthClient()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_client",
@@ -72,7 +71,7 @@ func main() {
 		"detail": "Client initialized",
 	}).Info("Client initialized")
 	defer func() {
-		clientInfo.CloseInitClient()
+		clientInfo.CloseEthClient()
 		log.WithFields(map[string]interface{}{
 			"action": "close_client",
 			"detail": "Client closed",

@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"net/http"
 	"staking-interaction/adapter"
-	"staking-interaction/common/logger"
 	"staking-interaction/dto"
+	"staking-interaction/middleware/logger"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
@@ -53,7 +53,7 @@ func AirdropERC20(c *gin.Context) {
 		return
 	}
 
-	client, err := adapter.NewInitClient()
+	client, err := adapter.NewInitEthClient()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return
@@ -106,7 +106,7 @@ func AirdropBNB(c *gin.Context) {
 		log.Fatalf("failed to generate random amounts: %v", err)
 	}
 
-	client, err := adapter.NewInitClient()
+	client, err := adapter.NewInitEthClient()
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"msg": "client init failed", "err": err})
 		return

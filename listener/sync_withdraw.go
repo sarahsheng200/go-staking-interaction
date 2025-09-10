@@ -51,17 +51,27 @@ func (s *SyncWithdrawHandler) Stop() {
 func (s *SyncWithdrawHandler) syncWithdraw() {
 	for atomic.LoadInt32(&s.isWithDrawHandlerRunning) == 1 {
 		withDrawList, err := repository.GetWithdrawalInfoByStatus(config.WithdrawStatusPending)
-		if err != nil {
+		if err != nil || len(withDrawList) == 0 {
 			s.log.WithFields(logrus.Fields{
 				"module":     "sync_withdraw",
 				"action":     "GetWithdrawInfo",
 				"error_code": "GET_WITHDRAW_FAIL",
-				"detail":     err.Error(),
-			}).Error("GetWithdrawInfo  error")
+				"error":      err,
+			}).Error("GetWithdrawInfo error or withdraw list is empty")
+			time.Sleep(5 * time.Second)
 			continue
-
 		}
-		for _, withdrawInfo := range withDrawList {
+		for i, withdrawInfo := range withDrawList {
+			if atomic.LoadInt32(&s.isWithDrawHandlerRunning) != 1 {
+				s.log.WithFields(logrus.Fields{
+					"module":    "withdraw_handler",
+					"action":    "service_stopping",
+					"processed": i,
+					"total":     len(withDrawList),
+				}).Info("Service stopping, processed withdrawals")
+				break
+			}
+
 			err := s.processWithdraw(withdrawInfo)
 			if err != nil {
 				s.log.WithFields(logrus.Fields{
@@ -115,11 +125,12 @@ func (s *SyncWithdrawHandler) processWithdraw(withdrawInfo model.Withdrawal) err
 }
 
 func (s *SyncWithdrawHandler) executeWithdrawWithLock(ctx context.Context, withdrawInfo model.Withdrawal, receipt *types.Receipt, amount *big.Int) error {
-	//获取锁
 	account, err := repository.GetAccount(withdrawInfo.WalletAddress)
 	if err != nil {
 		return fmt.Errorf("get wallet account failed: %w", err)
 	}
+
+	//获取锁
 	assetLock, err := s.lockManager.AcquireAssetLock(context.Background(), account.AccountID, withdrawInfo.TokenType)
 	if err != nil {
 		return fmt.Errorf("acquire assetLock failed: %w ,accountid:%d, tx_hash:%s", err, account.AccountID, withdrawInfo.Hash)
@@ -150,17 +161,12 @@ func (s *SyncWithdrawHandler) handleWithdrawTransaction(ctx context.Context, rec
 	return repository.SwWithTransaction(func(wd *repository.SwRepo) error {
 		// 检查交易是否成功
 		if receipt.Status != types.ReceiptStatusSuccessful {
+			// 更新提现状态为"失败"
 			withdrawInfo.Status = config.WithdrawStatusFailed
 			if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
 				fmt.Printf("SyncWithdrawHandler: UpdateWithdrawInfo failed: %v\n", err)
 			}
 			return fmt.Errorf("SyncWithdrawHandler: GetTransactionReceipt failed id: %d, hash:%s\n", withdrawInfo.ID, withdrawInfo.Hash)
-		}
-
-		// 更新提现状态为"成功"
-		withdrawInfo.Status = config.WithdrawStatusSuccess
-		if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
-			return fmt.Errorf("SyncWithdrawHandler: UpdateWithdrawInfo failed: %v, withdrawid:%d\n", err, withdrawInfo.ID)
 		}
 
 		// 检查区块确认数是否足够

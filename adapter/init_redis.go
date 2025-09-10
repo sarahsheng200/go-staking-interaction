@@ -1,4 +1,4 @@
-package redis
+package adapter
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 )
 
 func NewRedisClient(redisConfig config.RedisConfig) (*redis.Client, error) {
-
 	client := redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", redisConfig.Host, redisConfig.Port),
 		Password:     redisConfig.Password,

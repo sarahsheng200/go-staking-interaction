@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
-	"staking-interaction/database"
+	"staking-interaction/adapter"
 	"staking-interaction/model"
 )
 
@@ -40,14 +40,14 @@ func (w *WdRepo) UpdateWithdrawalInfo(withdraw model.Withdrawal) error {
 
 func GetWithdrawalInfoByStatus(status int) ([]model.Withdrawal, error) {
 	var withdrawalInfo []model.Withdrawal
-	if err := database.DB.Where("status=?", status).Find(&withdrawalInfo).Error; err != nil {
+	if err := adapter.DB.Where("status=?", status).Find(&withdrawalInfo).Error; err != nil {
 		return nil, fmt.Errorf("WdRepo GetWithdrawalInfoByStatus failed: %w", err)
 	}
 	return withdrawalInfo, nil
 }
 
 func WdWithTransaction(fn func(wd *WdRepo) error) error {
-	db := database.DB
+	db := adapter.DB
 
 	return db.Transaction(func(wd *gorm.DB) error {
 		wdRepo := &WdRepo{db: wd}

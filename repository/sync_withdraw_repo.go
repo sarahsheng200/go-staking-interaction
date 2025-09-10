@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
+	"staking-interaction/adapter"
 	"staking-interaction/common/config"
-	"staking-interaction/database"
 	"staking-interaction/model"
 	"time"
 )
@@ -74,6 +74,7 @@ func (w *SwRepo) UpdateAssetWithOptimisticLock(
 		Updates(map[string]interface{}{
 			"bnb_balance": asset.BnbBalance,
 			"mtk_balance": asset.MtkBalance,
+			"status":      config.WithdrawStatusSuccess,
 			"version":     asset.Version,
 			"updated_at":  asset.UpdatedAt,
 		})
@@ -90,7 +91,7 @@ func (w *SwRepo) UpdateAssetWithOptimisticLock(
 }
 
 func SwWithTransaction(fn func(wd *SwRepo) error) error {
-	db := database.DB
+	db := adapter.DB
 
 	return db.Transaction(func(wd *gorm.DB) error {
 		SwRepo := &SwRepo{db: wd}

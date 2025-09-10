@@ -2,13 +2,13 @@ package repository
 
 import (
 	"fmt"
-	"staking-interaction/database"
+	"staking-interaction/adapter"
 	"staking-interaction/model"
 )
 
 func GetAccount(fromAddress string) (*model.Account, error) {
 	account := model.Account{}
-	if err := database.DB.Model(&model.Account{}).Where("wallet_address = ?", fromAddress).First(&account).Error; err != nil {
+	if err := adapter.DB.Model(&model.Account{}).Where("wallet_address = ?", fromAddress).First(&account).Error; err != nil {
 		return nil, fmt.Errorf("repo: get account asset failed: %w", err)
 	}
 
@@ -17,7 +17,7 @@ func GetAccount(fromAddress string) (*model.Account, error) {
 
 func GetAccountAsset(accountId int) (*model.AccountAsset, error) {
 	asset := model.AccountAsset{}
-	err := database.DB.Model(&model.AccountAsset{}).Where("account_id = ?", accountId).First(&asset).Error
+	err := adapter.DB.Model(&model.AccountAsset{}).Where("account_id = ?", accountId).First(&asset).Error
 	if err != nil {
 		return nil, fmt.Errorf("repo: get account asset failed: %w", err)
 	}
@@ -27,5 +27,5 @@ func GetAccountAsset(accountId int) (*model.AccountAsset, error) {
 
 func UpdateAsset(asset *model.AccountAsset) error {
 	// 注意：需确保asset包含主键ID或唯一索引字段（如AccountID+TokenAddr）
-	return database.DB.Save(asset).Error
+	return adapter.DB.Save(asset).Error
 }

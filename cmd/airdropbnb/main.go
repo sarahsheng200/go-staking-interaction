@@ -5,8 +5,7 @@ import (
 	"math/big"
 	"os"
 	"staking-interaction/adapter"
-	"staking-interaction/common/logger"
-	"staking-interaction/database"
+	"staking-interaction/middleware/logger"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
@@ -51,7 +50,7 @@ func main() {
 	}
 
 	// 连接数据库
-	err := database.MysqlConn()
+	err := adapter.MysqlConn()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_db",
@@ -65,7 +64,7 @@ func main() {
 		"detail": "MySQL database connected",
 	}).Info("Database connected")
 	defer func() {
-		err := database.CloseConn()
+		err := adapter.CloseConn()
 		if err != nil {
 			log.WithFields(map[string]interface{}{
 				"action":     "close_db",
@@ -75,7 +74,7 @@ func main() {
 		}
 	}()
 
-	clientInfo, err := adapter.NewInitClient()
+	clientInfo, err := adapter.NewInitEthClient()
 	if err != nil {
 		log.WithFields(map[string]interface{}{
 			"action":     "init_client",
@@ -83,7 +82,7 @@ func main() {
 			"detail":     err.Error(),
 		}).Fatal("Init client failed")
 	}
-	defer clientInfo.CloseInitClient()
+	defer clientInfo.CloseEthClient()
 
 	amountArray, err := utils.GenerateRandomAmount(*countFlag, maxAmount)
 	if err != nil {

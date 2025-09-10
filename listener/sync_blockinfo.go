@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/sirupsen/logrus"
 	"math/big"
+	"staking-interaction/adapter"
 	"staking-interaction/common/config"
 	"staking-interaction/common/redis"
 	"staking-interaction/dto"
@@ -21,13 +22,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-// SyncBlockInfo 区块同步服务
-type SyncBlockInfo struct {
-	client        *ethclient.Client
+// SyncBlock 区块同步服务
+type SyncBlock struct {
+	client        *adapter.InitClient
 	isSyncRunning int32         // 原子操作控制同步状态
 	mu            sync.RWMutex  // 保护doneBlock的读写
 	doneBlock     uint64        // 当前已同步的区块号
@@ -35,55 +34,24 @@ type SyncBlockInfo struct {
 	blockManager  *repository.BlockSyncManager
 	workerWg      sync.WaitGroup // 等待所有交易处理Goroutine退出
 	lockManager   *redis.LockManager
-	// 添加配置和指标
-	config  *SyncConfig
-	metrics *SyncMetrics
-	log     *logrus.Logger
+	config        config.BlockchainConfig
+	log           *logrus.Logger
 }
-
-type SyncConfig struct {
-	WorkerCount     int           `json:"worker_count"`
-	BlockTimeout    time.Duration `json:"block_timeout"`
-	RetryDelay      time.Duration `json:"retry_delay"`
-	MaxBlocksBehind uint64        `json:"max_blocks_behind"`
-}
-
-type SyncMetrics struct {
-	ProcessedBlocks uint64
-	ProcessedTxs    uint64
-	FailedBlocks    uint64
-	FailedTxs       uint64
-	LastProcessTime time.Time
-	mu              sync.RWMutex
-}
-
-var conf = config.Get()
-var blockChainConf = conf.BlockchainConfig
 
 // NewSyncBlockInfo 创建新的区块同步服务
-func NewSyncBlockInfo(client *ethclient.Client, config *SyncConfig, lockManager *redis.LockManager, log *logrus.Logger) *SyncBlockInfo {
-	if config == nil {
-		config = &SyncConfig{
-			WorkerCount:     blockChainConf.Sync.Workers,
-			BlockTimeout:    blockChainConf.Sync.SyncInterval,
-			RetryDelay:      blockChainConf.Sync.RetryDelay,
-			MaxBlocksBehind: blockChainConf.Sync.BlockBuffer,
-		}
-	}
-
-	return &SyncBlockInfo{
-		client:       client,
+func NewSyncBlockInfo(clientInfo *adapter.InitClient, config config.BlockchainConfig, lockManager *redis.LockManager, log *logrus.Logger) *SyncBlock {
+	return &SyncBlock{
+		client:       clientInfo,
 		blockManager: repository.NewBlockSyncManager("last_synced_block.txt"),
-		workerPool:   make(chan struct{}, config.WorkerCount), // 限制并发处理数量
+		workerPool:   make(chan struct{}, config.Sync.Workers), // 限制并发处理数量
 		config:       config,
-		metrics:      &SyncMetrics{},
 		lockManager:  lockManager,
 		log:          log,
 	}
 }
 
 // Start 启动区块同步
-func (s *SyncBlockInfo) Start() {
+func (s *SyncBlock) Start() {
 	if !atomic.CompareAndSwapInt32(&s.isSyncRunning, 0, 1) {
 		s.log.WithFields(logrus.Fields{
 			"module": "sync_block",
@@ -121,6 +89,7 @@ func (s *SyncBlockInfo) Start() {
 				return
 			}
 		}()
+		// 处理扫块逻辑
 		s.syncLoop()
 	}()
 
@@ -132,14 +101,14 @@ func (s *SyncBlockInfo) Start() {
 	}).Info("Sync service started successfully")
 }
 
-func (s *SyncBlockInfo) initializeStartBlock() error {
+func (s *SyncBlock) initializeStartBlock() error {
 	//if err := s.loadLastSyncedBlock(); err != nil || s.getDoneBlock() == 0 {
 	//fmt.Println("Failed to load last synced block, starting from current", "error", err)
 	if s.getDoneBlock() == 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), s.config.BlockTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), s.config.Sync.SyncInterval)
 		defer cancel()
 
-		currentBlock, e := s.client.BlockNumber(ctx)
+		currentBlock, e := s.client.Client.BlockNumber(ctx)
 		if e != nil {
 			return fmt.Errorf("failed to get current block: %w", e)
 		}
@@ -149,7 +118,7 @@ func (s *SyncBlockInfo) initializeStartBlock() error {
 }
 
 // Stop 停止区块同步
-func (s *SyncBlockInfo) Stop() {
+func (s *SyncBlock) Stop() {
 	atomic.StoreInt32(&s.isSyncRunning, 0)
 	s.log.WithFields(logrus.Fields{
 		"module": "sync_block",
@@ -163,22 +132,12 @@ func (s *SyncBlockInfo) Stop() {
 	}).Info("Sync service stopped")
 }
 
-func (s *SyncBlockInfo) syncLoop() {
-	chainID, err := s.client.ChainID(context.Background())
-	if err != nil {
-		s.log.WithFields(logrus.Fields{
-			"module":     "sync_block",
-			"action":     "get_chain_id",
-			"error_code": "CHAIN_ID_FAIL",
-			"detail":     err.Error(),
-		}).Error("Failed to get chain ID")
-		return
-	}
-
+func (s *SyncBlock) syncLoop() {
+	chainID := s.client.ChainID
 	for atomic.LoadInt32(&s.isSyncRunning) == 1 {
-		blockCtx, cancel := context.WithTimeout(context.Background(), s.config.BlockTimeout)
+		blockCtx, cancel := context.WithTimeout(context.Background(), s.config.Sync.SyncInterval)
 
-		currentBlock, err := s.client.BlockNumber(blockCtx)
+		currentBlock, err := s.client.Client.BlockNumber(blockCtx)
 		if err != nil {
 			s.log.WithFields(logrus.Fields{
 				"module":            "sync_block",
@@ -194,7 +153,7 @@ func (s *SyncBlockInfo) syncLoop() {
 
 		doneBlock := s.getDoneBlock()
 		// 控制同步距离，避免超前太多
-		if currentBlock < doneBlock+s.config.MaxBlocksBehind {
+		if currentBlock < doneBlock+s.config.Sync.BlockBuffer {
 			s.log.WithFields(logrus.Fields{
 				"module":        "sync_block",
 				"action":        "wait_new_block",
@@ -247,9 +206,9 @@ func (s *SyncBlockInfo) syncLoop() {
 }
 
 // 处理单个区块
-func (s *SyncBlockInfo) processBlock(blockCtx context.Context, chainID *big.Int, blockNumber uint64) error {
+func (s *SyncBlock) processBlock(blockCtx context.Context, chainID *big.Int, blockNumber uint64) error {
 	// 获取区块详情
-	block, err := s.client.BlockByNumber(blockCtx, big.NewInt(int64(blockNumber)))
+	block, err := s.client.Client.BlockByNumber(blockCtx, big.NewInt(int64(blockNumber)))
 	if err != nil {
 		if errors.Is(err, ethereum.NotFound) {
 			s.log.WithFields(logrus.Fields{
@@ -328,9 +287,9 @@ func (s *SyncBlockInfo) processBlock(blockCtx context.Context, chainID *big.Int,
 }
 
 // 处理单个交易
-func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.Int, tx *types.Transaction) error {
+func (s *SyncBlock) processTransaction(txCtx context.Context, chainID *big.Int, tx *types.Transaction) error {
 	// 获取交易回执
-	receipt, err := s.client.TransactionReceipt(txCtx, tx.Hash())
+	receipt, err := s.client.Client.TransactionReceipt(txCtx, tx.Hash())
 	if err != nil {
 		return fmt.Errorf("get transaction receipt: %w", err)
 	}
@@ -347,7 +306,7 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 
 	toAddr := *tx.To()
 	// 检查接收地址是否为平台地址
-	if !isToAddrValid(toAddr) {
+	if !s.isToAddrValid(toAddr) {
 		s.log.WithFields(logrus.Fields{
 			"module":     "sync_block",
 			"action":     "skip_not_to_our_address",
@@ -375,8 +334,8 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 	}
 
 	// 检查发送者是否为平台用户
-	isValidAccount, accountId := isValidAccount(fromAddr)
-	if !isValidAccount {
+	IsPlatformAccount, accountId := isFromAddrValid(fromAddr)
+	if !IsPlatformAccount {
 		s.log.WithFields(logrus.Fields{
 			"module":       "sync_block",
 			"action":       "skip_not_customer",
@@ -417,7 +376,7 @@ func (s *SyncBlockInfo) processTransaction(txCtx context.Context, chainID *big.I
 }
 
 // 通用代币交易处理逻辑
-func (s *SyncBlockInfo) handleTokenTransaction(
+func (s *SyncBlock) handleTokenTransaction(
 	tx *types.Transaction,
 	receipt *types.Receipt,
 	accountId int,
@@ -460,7 +419,7 @@ func (s *SyncBlockInfo) handleTokenTransaction(
 	return s.executeTransactionWithLock(receipt, accountId, fromAddr, toAddr, amount, tokenType)
 }
 
-func (s *SyncBlockInfo) executeTransactionWithLock(
+func (s *SyncBlock) executeTransactionWithLock(
 	receipt *types.Receipt,
 	accountId int,
 	fromAddr, toAddr common.Address,
@@ -535,7 +494,7 @@ func (s *SyncBlockInfo) executeTransactionWithLock(
 		return nil
 	})
 }
-func (s *SyncBlockInfo) calculateBalance(tokenType int, asset *model.AccountAsset, amount *big.Int) (string, string, error) {
+func (s *SyncBlock) calculateBalance(tokenType int, asset *model.AccountAsset, amount *big.Int) (string, string, error) {
 	var preBalanceStr string
 	var err error
 	var preBalance *big.Int
@@ -564,8 +523,8 @@ func (s *SyncBlockInfo) calculateBalance(tokenType int, asset *model.AccountAsse
 }
 
 // 处理ERC20代币交易
-func (s *SyncBlockInfo) handleERC20Tx(tx *types.Transaction, receipt *types.Receipt, accountId int) error {
-	transEvent, err := parseERC20TxByReceipt(receipt)
+func (s *SyncBlock) handleERC20Tx(tx *types.Transaction, receipt *types.Receipt, accountId int) error {
+	transEvent, err := s.parseERC20TxByReceipt(receipt)
 	if err != nil {
 		return fmt.Errorf("parse erc20 tx: %w", err)
 	}
@@ -582,8 +541,7 @@ func (s *SyncBlockInfo) handleERC20Tx(tx *types.Transaction, receipt *types.Rece
 }
 
 // 解析ERC20交易事件
-func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
-
+func (s *SyncBlock) parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 	tran := dto.TransferEvent{}
 	var erc20TransferEventABIJson = `[
 		{
@@ -598,7 +556,7 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 		}
 	]`
 
-	tokenAddr := common.HexToAddress(blockChainConf.Contracts.Token)
+	tokenAddr := common.HexToAddress(s.config.Contracts.Token)
 	erc20ABI, err := abi.JSON(strings.NewReader(erc20TransferEventABIJson))
 	if err != nil {
 		return nil, fmt.Errorf("parse erc20 abi: %w", err)
@@ -611,7 +569,7 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 			continue
 		}
 
-		if common.BytesToHash(log.Topics[0].Bytes()).Hex() != transferEventSig {
+		if log.Topics[0].Hex() != transferEventSig {
 			continue
 		}
 
@@ -627,9 +585,9 @@ func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
 }
 
 // 检查是否为合约地址
-func (s *SyncBlockInfo) isContractTx(blockCtx context.Context, to common.Address) (bool, error) {
+func (s *SyncBlock) isContractTx(blockCtx context.Context, to common.Address) (bool, error) {
 	// 合约地址有字节码，普通地址无
-	code, err := s.client.CodeAt(blockCtx, to, nil)
+	code, err := s.client.Client.CodeAt(blockCtx, to, nil)
 	if err != nil {
 		return false, fmt.Errorf("get code at address: %w", err)
 	}
@@ -637,8 +595,8 @@ func (s *SyncBlockInfo) isContractTx(blockCtx context.Context, to common.Address
 }
 
 // 检查接收地址是否有效
-func isToAddrValid(toAddr common.Address) bool {
-	for _, addr := range blockChainConf.Owners {
+func (s *SyncBlock) isToAddrValid(toAddr common.Address) bool {
+	for _, addr := range s.config.Owners {
 		if common.HexToAddress(addr) == toAddr {
 			return true
 		}
@@ -647,7 +605,7 @@ func isToAddrValid(toAddr common.Address) bool {
 }
 
 // 检查账户是否有效
-func isValidAccount(fromAddr common.Address) (bool, *int) {
+func isFromAddrValid(fromAddr common.Address) (bool, *int) {
 	account, err := repository.GetAccount(fromAddr.Hex())
 	if err != nil {
 		return false, nil
@@ -670,7 +628,7 @@ func getTokenTypeName(tokenType int) string {
 }
 
 // 加载上次同步的区块号
-func (s *SyncBlockInfo) loadLastSyncedBlock() error {
+func (s *SyncBlock) loadLastSyncedBlock() error {
 	block, err := s.blockManager.GetLastSyncedBlock()
 	if err != nil {
 		return err
@@ -680,19 +638,19 @@ func (s *SyncBlockInfo) loadLastSyncedBlock() error {
 }
 
 // 保存已同步的区块号
-func (s *SyncBlockInfo) saveSyncedBlock(block uint64) error {
+func (s *SyncBlock) saveSyncedBlock(block uint64) error {
 	return s.blockManager.SaveSyncedBlock(block)
 }
 
 // 获取当前已同步的区块号
-func (s *SyncBlockInfo) getDoneBlock() uint64 {
+func (s *SyncBlock) getDoneBlock() uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.doneBlock
 }
 
 // 设置已同步的区块号
-func (s *SyncBlockInfo) setDoneBlock(block uint64) {
+func (s *SyncBlock) setDoneBlock(block uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.doneBlock = block

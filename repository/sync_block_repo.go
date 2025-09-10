@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
+	"staking-interaction/adapter"
 	config "staking-interaction/common/config"
-	"staking-interaction/database"
 	"staking-interaction/model"
 	"time"
 )
@@ -104,7 +104,7 @@ func (t *TxRepository) UpdateAssetWithOptimisticLock(
 	asset.UpdatedAt = time.Now()
 
 	// 使用乐观锁更新（WHERE version = current_version）
-	result := t.db.Model(asset).
+	res := t.db.Model(asset).
 		Where("account_id = ? AND version = ?", asset.AccountID, currentVersion).
 		Updates(map[string]interface{}{
 			"bnb_balance": asset.BnbBalance,
@@ -113,11 +113,11 @@ func (t *TxRepository) UpdateAssetWithOptimisticLock(
 			"updated_at":  asset.UpdatedAt,
 		})
 
-	if result.Error != nil {
-		return fmt.Errorf("updateasset with optimistic lock failed: %w", result.Error)
+	if res.Error != nil {
+		return fmt.Errorf("updateasset with optimistic lock failed: %w", res.Error)
 	}
 
-	if result.RowsAffected == 0 {
+	if res.RowsAffected == 0 {
 		return fmt.Errorf("optimistic lock failed: asset was modified by another process")
 	}
 
@@ -127,12 +127,12 @@ func (t *TxRepository) UpdateAssetWithOptimisticLock(
 // TxWithTransaction 核心事务封装函数
 // 参数：fn 是“需要在事务内执行的业务逻辑”（接收 TxRepository，返回 error）
 func TxWithTransaction(fn func(txRepo *TxRepository) error) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
+	return adapter.DB.Transaction(func(tx *gorm.DB) error {
 		txRepo := &TxRepository{db: tx} // 所有操作共享同一个事务
 
 		if err := fn(txRepo); err != nil {
 			// GORM 会自动回滚事务
-			return fmt.Errorf("transaction business failed: %w", err)
+			return fmt.Errorf("sync block with transaction failed: %w", err)
 		}
 
 		return nil // GORM 会自动提交事务

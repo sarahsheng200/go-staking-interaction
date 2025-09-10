@@ -52,13 +52,13 @@ func (w *WithdrawHandler) Stop() {
 
 func (w *WithdrawHandler) processWithdrawals() {
 	withDrawList, err := repository.GetWithdrawalInfoByStatus(config.WithdrawStatusInit)
-	if err != nil {
+	if err != nil || len(withDrawList) == 0 {
 		w.log.WithFields(logrus.Fields{
 			"module":     "withdraw_handler",
 			"action":     "get_withdrawals",
 			"error_code": "GET_WITHDRAWALS_FAIL",
-			"detail":     err.Error(),
-		}).Error("Failed to get init withdraw info")
+			"error":      err,
+		}).Error("GetWithdrawInfo error or withdraw list is empty")
 		return
 	}
 
@@ -86,7 +86,6 @@ func (w *WithdrawHandler) processWithdrawals() {
 }
 
 func (w *WithdrawHandler) executeHandlerWithLock(withdraw model.Withdrawal) error {
-	//获取锁
 	account, err := repository.GetAccount(withdraw.WalletAddress)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
@@ -99,6 +98,8 @@ func (w *WithdrawHandler) executeHandlerWithLock(withdraw model.Withdrawal) erro
 		return fmt.Errorf("get wallet account failed: %w", err)
 	}
 	accountId := account.AccountID
+
+	//获取锁
 	assetLock, err := w.lockManager.AcquireAssetLock(context.Background(), accountId, withdraw.TokenType)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
@@ -202,7 +203,7 @@ func (w *WithdrawHandler) handleWithdrawTransaction(withdraw model.Withdrawal, a
 }
 
 func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance string) (*model.Withdrawal, error) {
-	amount, err := utils.StringToBigInt(withdraw.Value)
+	value, err := utils.StringToBigInt(withdraw.Value)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
 			"module":         "withdraw_handler",
@@ -211,9 +212,10 @@ func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance s
 			"withdraw_Value": withdraw.Value,
 			"error_code":     "PARSE_AMOUNT_FAIL",
 			"detail":         err.Error(),
-		}).Error("Parse withdraw amount error")
-		return nil, fmt.Errorf("transactionBNB: parse withdraw amount error: %w", err)
+		}).Error("Parse withdraw value error")
+		return nil, fmt.Errorf("transactionBNB: parse withdraw value error: %w", err)
 	}
+
 	balance, err := utils.StringToBigInt(bnbBalance)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
@@ -226,29 +228,33 @@ func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance s
 		}).Error("Parse withdraw BNB balance error")
 		return nil, fmt.Errorf("transactionBNB: parse withdraw bnb balance error: %w", err)
 	}
-	if amount.Cmp(balance) == 1 {
+
+	// 判断是否余额充足 balance>=value
+	if value.Cmp(balance) >= 0 {
 		w.log.WithFields(logrus.Fields{
 			"module":      "withdraw_handler",
 			"action":      "balance_check",
 			"withdraw_id": withdraw.ID,
-			"amount":      amount.String(),
+			"value":       value.String(),
 			"balance":     balance.String(),
 			"error_code":  "INSUFFICIENT_BALANCE",
 		}).Error("Withdraw BNB balance is not enough")
-		return nil, fmt.Errorf("transactionBNB: balance is not enough, amount: %w, balance:%w", amount, balance)
+		return nil, fmt.Errorf("transactionBNB: balance is not enough, value: %w, balance:%w", value, balance)
 	}
-	tx, err := w.txService.SendBNB(withdraw.WalletAddress, amount)
+
+	// 调用transfer BNB， 发送BNB
+	tx, err := w.txService.SendBNB(withdraw.WalletAddress, value)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
 			"module":         "withdraw_handler",
 			"action":         "send_bnb",
 			"withdraw_id":    withdraw.ID,
 			"wallet_address": withdraw.WalletAddress,
-			"amount":         amount.String(),
+			"value":          value.String(),
 			"error_code":     "SEND_BNB_FAIL",
 			"detail":         err.Error(),
 		}).Error("Send withdraw BNB error")
-		return nil, fmt.Errorf("transactionBNB: send withdraw amount error: %w", err)
+		return nil, fmt.Errorf("transactionBNB: send withdraw value error: %w", err)
 	}
 
 	withdraw.Hash = tx.Hash
@@ -259,7 +265,7 @@ func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance s
 		"action":         "send_bnb",
 		"withdraw_id":    withdraw.ID,
 		"wallet_address": withdraw.WalletAddress,
-		"amount":         amount.String(),
+		"value":          value.String(),
 		"tx_hash":        tx.Hash,
 		"result":         "pending",
 	}).Info("BNB withdrawal transaction sent")
@@ -268,7 +274,7 @@ func (w *WithdrawHandler) transactionBNB(withdraw model.Withdrawal, bnbBalance s
 }
 
 func (w *WithdrawHandler) transactionERC20(withdraw model.Withdrawal, mtkBalance string) (*model.Withdrawal, error) {
-	amount, err := utils.StringToBigInt(withdraw.Value)
+	value, err := utils.StringToBigInt(withdraw.Value)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
 			"module":      "withdraw_handler",
@@ -276,8 +282,8 @@ func (w *WithdrawHandler) transactionERC20(withdraw model.Withdrawal, mtkBalance
 			"withdraw_id": withdraw.ID,
 			"error_code":  "PARSE_AMOUNT_FAIL",
 			"detail":      err.Error(),
-		}).Error("Parse withdraw amount error")
-		return nil, fmt.Errorf("transactionERC20: parse withdraw amount error: %w, withdraw.Amount:%s", err, withdraw.Amount)
+		}).Error("Parse withdraw value error")
+		return nil, fmt.Errorf("transactionERC20: parse withdraw value error: %w, withdraw.Amount:%s", err, withdraw.Amount)
 	}
 	balance, err := utils.StringToBigInt(mtkBalance)
 	if err != nil {
@@ -290,25 +296,29 @@ func (w *WithdrawHandler) transactionERC20(withdraw model.Withdrawal, mtkBalance
 		}).Error("Parse withdraw MTK balance error")
 		return nil, fmt.Errorf("transactionERC20: parse withdraw mtk balance error: %w", err)
 	}
-	if amount.Cmp(balance) == 1 {
+
+	// 判断是否余额充足 balance>=value
+	if value.Cmp(balance) >= 0 {
 		w.log.WithFields(logrus.Fields{
 			"module":      "withdraw_handler",
 			"action":      "balance_check",
 			"withdraw_id": withdraw.ID,
-			"amount":      amount.String(),
+			"value":       value.String(),
 			"balance":     balance.String(),
 			"error_code":  "INSUFFICIENT_BALANCE",
 		}).Error("Withdraw MTK balance is not enough")
-		return nil, fmt.Errorf("transactionERC20: balance is not enough, amount: %w, balance:%w", amount, balance)
+		return nil, fmt.Errorf("transactionERC20: balance is not enough, value: %w, balance:%w", value, balance)
 	}
-	tx, err := w.txService.SendErc20(withdraw.WalletAddress, amount)
+
+	// 调用transfer Erc20， 发送MTK
+	tx, err := w.txService.SendErc20(withdraw.WalletAddress, value)
 	if err != nil {
 		w.log.WithFields(logrus.Fields{
 			"module":         "withdraw_handler",
 			"action":         "send_erc20",
 			"withdraw_id":    withdraw.ID,
 			"wallet_address": withdraw.WalletAddress,
-			"amount":         amount.String(),
+			"value":          value.String(),
 			"error_code":     "SEND_ERC20_FAIL",
 			"detail":         err.Error(),
 		}).Error("Send withdraw ERC20 error")
@@ -323,7 +333,7 @@ func (w *WithdrawHandler) transactionERC20(withdraw model.Withdrawal, mtkBalance
 		"action":         "send_erc20",
 		"withdraw_id":    withdraw.ID,
 		"wallet_address": withdraw.WalletAddress,
-		"amount":         amount.String(),
+		"value":          value.String(),
 		"tx_hash":        tx.Hash,
 		"result":         "pending",
 	}).Info("ERC20 withdrawal transaction sent")
