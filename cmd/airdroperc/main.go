@@ -5,13 +5,13 @@ import (
 	"math/big"
 	"os"
 	"staking-interaction/adapter"
-	"staking-interaction/middleware/logger"
+	"staking-interaction/middleware"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
 
 func main() {
-	log := logger.GetLogger()
+	log := middleware.GetLogger()
 	log.WithFields(map[string]interface{}{
 		"module": "cmd/airdroperc",
 	})

@@ -2,11 +2,13 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"log"
 	"staking-interaction/controller"
+	"staking-interaction/middleware"
 )
 
-func InitRouter() *gin.Engine {
+func InitRouter(redis *redis.Client) *gin.Engine {
 	log.Println("Initializing router")
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -28,10 +30,22 @@ func InitRouter() *gin.Engine {
 		airdrop.POST("/generateWallet", controller.GenerateMultiWallets)
 	}
 
+	authMid := middleware.NewAuthMiddleware(redis)
 	transfer := group.Group("/transfer")
+	transfer.Use(authMid.AuthMiddleware())
 	{
 		transfer.POST("/transferERC20", controller.SendErc20)
 		transfer.POST("/transferBNB", controller.SendBNB)
+	}
+
+	auth := group.Group("/login")
+	{
+		auth.POST("/bsc", func(c *gin.Context) {
+			controller.LoginBSC(c, redis)
+		})
+		auth.POST("/solana", func(c *gin.Context) {
+			controller.LoginSolana(c, redis)
+		})
 	}
 
 	return router

@@ -3,7 +3,7 @@ app:
   debug: true
   version: "0.0.1"
   host: 127.0.0.1
-  port: 8084
+  port: 8085
   log_level: "info"
   timeout: 60s
 
@@ -50,7 +50,7 @@ redis:
 blockchain:
   network: testnet
   rpc_url: "https://bsc-testnet-rpc.publicnode.com"
-  raw_url: "https://data-seed-prebsc-2-s1.binance.org:8545"
+  raw_url: "https://data-seed-prebsc-1-s1.binance.org:8545"
   private_key: "${BLOCKCHAIN_PRIVATE_KEY}"
   contracts:
     stake_address: "${STAKE_CONTRACT_ADDRESS}"
@@ -76,4 +76,11 @@ blockchain:
       - "${OWNER3}"
       - "${OWNER4}"
       - "${OWNER5}"
+
+jwt:
+  jwt_secret: "my_secret"
+  jwt_expiration: 30m
+  prefix: "Bearer "
+  max_delta: 3000000
+
 

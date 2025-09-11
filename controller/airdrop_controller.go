@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"staking-interaction/adapter"
 	"staking-interaction/dto"
-	"staking-interaction/middleware/logger"
+	"staking-interaction/middleware"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
@@ -26,7 +26,7 @@ func GenerateMultiWallets(c *gin.Context) {
 }
 
 func AirdropERC20(c *gin.Context) {
-	logger := logger.GetLogger()
+	logger := middleware.GetLogger()
 	logger.WithFields(map[string]interface{}{
 		"module": "controller/airdroperc",
 	})
@@ -73,7 +73,7 @@ func AirdropERC20(c *gin.Context) {
 }
 
 func AirdropBNB(c *gin.Context) {
-	logger := logger.GetLogger()
+	logger := middleware.GetLogger()
 	logger.WithFields(map[string]interface{}{
 		"module": "controller/airdropbnb",
 	})

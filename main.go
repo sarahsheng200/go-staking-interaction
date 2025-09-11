@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"staking-interaction/adapter"
 	"staking-interaction/common/config"
-	"staking-interaction/middleware/logger"
+	"staking-interaction/middleware"
 	srouter "staking-interaction/router"
 	"syscall"
 	"time"
@@ -18,8 +18,8 @@ import (
 
 func main() {
 	conf := config.Get()
-	logger.InitLogger(logrus.InfoLevel, true)
-	log := logger.GetLogger().WithFields(logrus.Fields{
+	middleware.InitLogger(logrus.InfoLevel, true)
+	log := middleware.GetLogger().WithFields(logrus.Fields{
 		"module": "main",                     // 主模块名
 		"env":    conf.AppConfig.Environment, // 环境
 		"pid":    os.Getpid(),                // 进程号
@@ -55,7 +55,17 @@ func main() {
 		}
 	}()
 
-	router := srouter.InitRouter()
+	redis, err := adapter.NewRedisClientWithRetry()
+	if err != nil {
+		log.WithFields(map[string]interface{}{
+			"action":     "init_redis",
+			"error_code": "REDIS_CONN_FAIL",
+			"detail":     err.Error(),
+		}).Fatal("Redis connection failed")
+	}
+	defer redis.Close()
+
+	router := srouter.InitRouter(redis)
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", conf.AppConfig.Port),
 		Handler: router,

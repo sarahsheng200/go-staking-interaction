@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"fmt"
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
@@ -15,6 +17,7 @@ type Config struct {
 	DatabaseConfig   `yaml:"database"`
 	RedisConfig      `yaml:"redis"`
 	BlockchainConfig `yaml:"blockchain"`
+	AuthConfig       `yaml:"jwt"`
 }
 
 // ===== 应用配置模块 =====
@@ -128,6 +131,15 @@ type RedisTokenConfig struct {
 	Port           int    `yaml:"port"`
 	Password       string `yaml:"password"`
 	DatabaseConfig int    `yaml:"database"`
+}
+
+type AuthConfig struct {
+	JwtSecret        string             `yaml:"jwt_secret"`
+	JwtExpiration    time.Duration      `yaml:"jwt_expiration"`
+	Prefix           string             `yaml:"prefix"`
+	MaxDelta         int                `yaml:"max_delta"` //分钟
+	EcdsaPublicKey   *ecdsa.PublicKey   `yaml:"ecdsa_public_key"`
+	Ed25519PublicKey *ed25519.PublicKey `yaml:"ed25519_public_key"`
 }
 
 // ===== 配置加载和管理 =====
@@ -338,4 +350,12 @@ func validateConfig(config *Config) error {
 	}
 
 	return nil
+}
+
+func SetEcdsaPublicKey(config *Config, publicKey *ecdsa.PublicKey) {
+	config.AuthConfig.EcdsaPublicKey = publicKey
+}
+
+func SetEd25519PublicKey(config *Config, publicKey *ed25519.PublicKey) {
+	config.AuthConfig.Ed25519PublicKey = publicKey
 }

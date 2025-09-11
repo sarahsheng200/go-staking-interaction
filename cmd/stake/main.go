@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"staking-interaction/adapter"
-	"staking-interaction/middleware/logger"
+	"staking-interaction/middleware"
 	"staking-interaction/service"
 )
 
 func main() {
-	log := logger.GetLogger().WithFields(map[string]interface{}{
+	log := middleware.GetLogger().WithFields(map[string]interface{}{
 		"module": "cmd/stake",
 	})
 
