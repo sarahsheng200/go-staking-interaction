@@ -2,10 +2,9 @@ package dto
 
 import (
 	"github.com/golang-jwt/jwt/v4"
-	"time"
 )
 
 type CustomClaims struct {
-	Exp time.Duration `json:"exp"`
+	WalletAddress string `json:"wallet_address"`
 	jwt.RegisteredClaims
 }

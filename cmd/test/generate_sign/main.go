@@ -17,7 +17,9 @@ func ChallengeMessage(nonce int, timestamp int64) string {
 
 func main() {
 	conf := config.Get()
-	// 本地测试参数（修改为你的私钥和salt）
+	key, _ := crypto.GenerateKey()
+	fmt.Println("PrivKey hex:", hex.EncodeToString(key.D.Bytes()))
+	// 本地测试参数
 	privateKeyHex := conf.BlockchainConfig.PrivateKey
 	walletAddr := conf.BlockchainConfig.Owners[1]
 	nonce := rand.Intn(999999)

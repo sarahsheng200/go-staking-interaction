@@ -78,7 +78,9 @@ blockchain:
       - "${OWNER5}"
 
 jwt:
-  jwt_secret: "my_secret"
+  jwt_secret: "${JWT_SECRET}"
+  ecdsa_private_key: "${JWT_SECRET}"
+  ed25519_seed: "${ED25519_SEED}"
   jwt_expiration: 30m
   prefix: "Bearer "
   max_delta: 3000000

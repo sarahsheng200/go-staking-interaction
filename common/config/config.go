@@ -139,7 +139,9 @@ type AuthConfig struct {
 	Prefix           string             `yaml:"prefix"`
 	MaxDelta         int                `yaml:"max_delta"` //分钟
 	EcdsaPublicKey   *ecdsa.PublicKey   `yaml:"ecdsa_public_key"`
+	EcdsaPrivateKey  string             `yaml:"ecdsa_private_key"`
 	Ed25519PublicKey *ed25519.PublicKey `yaml:"ed25519_public_key"`
+	Ed25519Seed      string             `yaml:"ed25519_seed"`
 }
 
 // ===== 配置加载和管理 =====

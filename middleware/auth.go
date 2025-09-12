@@ -33,18 +33,21 @@ func (a *Auth) AuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"msg": "extract token failed", "error": err.Error()})
 			return
 		}
+		//校验 JWT
+		address, err := a.VerifyJWTToken(token)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"msg": "invalid or expired token", "error": err.Error()})
+			return
+		}
+
 		//从 Redis 查找 Token 是否存在
-		key := fmt.Sprintf("token_bsc:%d", 1)
+		key := fmt.Sprintf("token_bsc:%s", address)
 		exists, err := a.redis.Exists(context.Background(), key).Result()
 		if err != nil || exists == 0 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"msg": "token is not existed", "error": err.Error()})
 			return
 		}
-		//校验 JWT
-		if err := a.VerifyJWTToken(token); err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"msg": "invalid or expired token", "error": err.Error()})
-			return
-		}
+
 		c.JSON(http.StatusOK, gin.H{"token": token})
 	}
 }
@@ -61,8 +64,7 @@ func (a *Auth) extractToken(req *http.Request) (string, error) {
 	return strings.TrimPrefix(authHeader, a.config.AuthConfig.Prefix), nil
 }
 
-func (a *Auth) VerifyJWTToken(tokenStr string) error {
-
+func (a *Auth) VerifyJWTToken(tokenStr string) (string, error) {
 	claims := &dto.CustomClaims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
@@ -72,18 +74,18 @@ func (a *Auth) VerifyJWTToken(tokenStr string) error {
 	})
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return fmt.Errorf("token is expired, please login, ExpiresAt:%v", claims.ExpiresAt)
+			return "", fmt.Errorf("token is expired, please login, ExpiresAt:%v", claims.ExpiresAt)
 		}
-		return fmt.Errorf("token parse failed: %v", err)
+		return "", fmt.Errorf("token parse failed: %v", err)
 	}
 	if !token.Valid {
-		return fmt.Errorf("token is not valid")
+		return "", fmt.Errorf("token is not valid")
 	}
 
-	return nil
+	return claims.WalletAddress, nil
 }
 
-func (a *Auth) VerifyJWTTokens(tokenStr string) error {
+func (a *Auth) VerifyJWTTokens(tokenStr string) (string, error) {
 	claims := &dto.CustomClaims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		switch token.Method.(type) {
@@ -104,15 +106,15 @@ func (a *Auth) VerifyJWTTokens(tokenStr string) error {
 	})
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return fmt.Errorf("token is expired, please login, ExpiresAt:%v", claims.ExpiresAt)
+			return "", fmt.Errorf("token is expired, please login, ExpiresAt:%v", claims.ExpiresAt)
 		}
-		return fmt.Errorf("token parse failed: %v", err)
+		return "", fmt.Errorf("token parse failed: %v", err)
 	}
 	if !token.Valid {
-		return fmt.Errorf("token is not valid")
+		return "", fmt.Errorf("token is not valid")
 	}
 
-	return nil
+	return claims.WalletAddress, nil
 }
 
 //func (a *AuthBSCService) Verify(token string, accountId int) bool {

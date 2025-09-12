@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v4"
@@ -65,14 +65,14 @@ func (a *AuthSolanaService) Login(signature string, address string, nonce string
 		return "", fmt.Errorf("invalid account, error: %v, address:%s", err, address)
 	}
 
-	publicKey, jwtToken, err := a.generateJWTToken()
+	publicKey, jwtToken, err := a.generateJWTToken(address)
 	config.SetEd25519PublicKey(a.config, publicKey)
 
 	if err != nil {
 		return "", fmt.Errorf("generate jwtToken error: %v", err)
 	}
 
-	if err := a.storeTokenToRedis(jwtToken, account.AccountID); err != nil {
+	if err := a.storeTokenToRedis(jwtToken, address); err != nil {
 		return "", fmt.Errorf("store token to redis error: %v", err)
 	}
 
@@ -80,9 +80,9 @@ func (a *AuthSolanaService) Login(signature string, address string, nonce string
 	return jwtToken, nil
 }
 
-func (a *AuthSolanaService) verifySolanaToken(msg string, signatureB58 string, pubkeyB58 string) (bool, error) {
-	// 解码公钥（base58转[]byte）
-	pubkey, err := base58.Decode(pubkeyB58)
+func (a *AuthSolanaService) verifySolanaToken(msg string, signatureB58 string, addressB58 string) (bool, error) {
+	// 解码公钥（base58转[]byte），
+	addressBytes, err := base58.Decode(addressB58)
 	if err != nil {
 		return false, fmt.Errorf("decode public key failed, error: %v", err)
 	}
@@ -92,18 +92,20 @@ func (a *AuthSolanaService) verifySolanaToken(msg string, signatureB58 string, p
 		return false, fmt.Errorf("decode signature failed, error: %v", err)
 	}
 	// ed25519验签
-	return ed25519.Verify(pubkey, []byte(msg), sigBytes), nil
+	return ed25519.Verify(addressBytes, []byte(msg), sigBytes), nil
 }
 
-func (a *AuthSolanaService) generateJWTToken() (*ed25519.PublicKey, string, error) {
+func (a *AuthSolanaService) generateJWTToken(walletAddress string) (*ed25519.PublicKey, string, error) {
 	// 生成的ed25519密钥
-	publicKey, private, err := ed25519.GenerateKey(rand.Reader)
+	seedBytes, err := hex.DecodeString(a.config.AuthConfig.Ed25519Seed)
 	if err != nil {
-		return nil, "", fmt.Errorf("ed25519.GenerateKey error: %v", err)
+		return nil, "", fmt.Errorf("decode seed failed, error: %v", err)
 	}
+	private := ed25519.NewKeyFromSeed(seedBytes)      // 64字节私钥
+	publicKey := private.Public().(ed25519.PublicKey) // 直接获取公钥
 
 	claims := dto.CustomClaims{
-		Exp: a.config.AuthConfig.JwtExpiration,
+		WalletAddress: walletAddress,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(a.config.AuthConfig.JwtExpiration)), //过期时间（当前时间+24小时）
 			IssuedAt:  jwt.NewNumericDate(time.Now()),                                        //签发时间（当前时间）
@@ -117,8 +119,8 @@ func (a *AuthSolanaService) generateJWTToken() (*ed25519.PublicKey, string, erro
 	return &publicKey, jwtToken, err
 }
 
-func (a *AuthSolanaService) storeTokenToRedis(token string, accountId int) error {
-	key := fmt.Sprintf("token_solana:%d", accountId)
+func (a *AuthSolanaService) storeTokenToRedis(token string, address string) error {
+	key := fmt.Sprintf("token_solana:%s", address)
 	a.redis.Set(context.Background(), key, token, a.config.AuthConfig.JwtExpiration)
 	return nil
 }

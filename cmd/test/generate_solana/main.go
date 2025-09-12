@@ -2,6 +2,8 @@ package main
 
 import (
 	"crypto/ed25519"
+	rander "crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"time"
@@ -20,6 +22,10 @@ type TestUser struct {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	var users []TestUser
+	publicKey, privateKey, _ := ed25519.GenerateKey(rander.Reader)
+
+	fmt.Printf("privateKey (len=%d): %s\n", len(privateKey), hex.EncodeToString(privateKey)) // 64字节
+	fmt.Printf("publicKey (len=%d): %s\n", len(publicKey), hex.EncodeToString(publicKey))    // 32字节
 
 	for i := 0; i < 5; i++ {
 		pub, priv, _ := ed25519.GenerateKey(nil)
