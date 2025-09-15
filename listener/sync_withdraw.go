@@ -168,6 +168,10 @@ func (s *SyncWithdrawHandler) handleWithdrawTransaction(ctx context.Context, rec
 			}
 			return fmt.Errorf("SyncWithdrawHandler: GetTransactionReceipt failed id: %d, hash:%s\n", withdrawInfo.ID, withdrawInfo.Hash)
 		}
+		withdrawInfo.Status = config.WithdrawStatusSuccess
+		if err := wd.UpdateWithdrawalInfo(withdrawInfo); err != nil {
+			fmt.Printf("SyncWithdrawHandler: UpdateWithdrawInfo failed: %v\n", err)
+		}
 
 		// 检查区块确认数是否足够
 		blockNumber := receipt.BlockNumber

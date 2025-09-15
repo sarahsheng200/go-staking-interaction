@@ -74,7 +74,6 @@ func (w *SwRepo) UpdateAssetWithOptimisticLock(
 		Updates(map[string]interface{}{
 			"bnb_balance": asset.BnbBalance,
 			"mtk_balance": asset.MtkBalance,
-			"status":      config.WithdrawStatusSuccess,
 			"version":     asset.Version,
 			"updated_at":  asset.UpdatedAt,
 		})

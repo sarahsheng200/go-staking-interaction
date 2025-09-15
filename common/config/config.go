@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"os"
 	"sync"
@@ -17,7 +18,8 @@ type Config struct {
 	DatabaseConfig   `yaml:"database"`
 	RedisConfig      `yaml:"redis"`
 	BlockchainConfig `yaml:"blockchain"`
-	AuthConfig       `yaml:"jwt"`
+	AuthConfig       `yaml:"auth"`
+	LogConfig        `yaml:"log"`
 }
 
 // ===== 应用配置模块 =====
@@ -126,13 +128,6 @@ type ContractAddresses struct {
 	Token   string `yaml:"token_address"`
 }
 
-type RedisTokenConfig struct {
-	Host           string `yaml:"host"`
-	Port           int    `yaml:"port"`
-	Password       string `yaml:"password"`
-	DatabaseConfig int    `yaml:"database"`
-}
-
 type AuthConfig struct {
 	JwtSecret        string             `yaml:"jwt_secret"`
 	JwtExpiration    time.Duration      `yaml:"jwt_expiration"`
@@ -142,6 +137,14 @@ type AuthConfig struct {
 	EcdsaPrivateKey  string             `yaml:"ecdsa_private_key"`
 	Ed25519PublicKey *ed25519.PublicKey `yaml:"ed25519_public_key"`
 	Ed25519Seed      string             `yaml:"ed25519_seed"`
+}
+
+type LogConfig struct {
+	Level        logrus.Level `yaml:"level"`
+	IsJsonFormat bool         `yaml:"is_json_format"`
+	LogPath      string       `yaml:"log_path"`
+	LogFile      string       `yaml:"log_file"`
+	MaxAge       int          `yaml:"maxAge"`
 }
 
 // ===== 配置加载和管理 =====
@@ -324,6 +327,14 @@ func setDefaults(config *Config) {
 	}
 	if config.BlockchainConfig.Sync.RetryDelay == 0 {
 		config.BlockchainConfig.Sync.RetryDelay = 5 * time.Second
+	}
+
+	if config.LogConfig.Level == 0 {
+		if config.AppConfig.Environment == "local" {
+			config.LogConfig.Level = logrus.InfoLevel
+		} else {
+			config.LogConfig.Level = logrus.DebugLevel
+		}
 	}
 }
 

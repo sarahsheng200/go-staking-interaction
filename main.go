@@ -18,7 +18,6 @@ import (
 
 func main() {
 	conf := config.Get()
-	middleware.InitLogger(logrus.InfoLevel, true)
 	log := middleware.GetLogger().WithFields(logrus.Fields{
 		"module": "main",                     // 主模块名
 		"env":    conf.AppConfig.Environment, // 环境
