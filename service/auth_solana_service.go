@@ -11,8 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"staking-interaction/common/config"
+	"staking-interaction/common/logger"
 	"staking-interaction/dto"
-	"staking-interaction/middleware"
 	"staking-interaction/repository"
 	"time"
 )
@@ -25,7 +25,7 @@ type AuthSolanaService struct {
 
 func NewAuthSolanaService(redis *redis.Client) *AuthSolanaService {
 	conf := config.Get()
-	log := middleware.GetLogger()
+	log := logger.GetLogger()
 	log.WithFields(logrus.Fields{
 		"module": "solana_auth_service",      // 主模块名
 		"env":    conf.AppConfig.Environment, // 环境

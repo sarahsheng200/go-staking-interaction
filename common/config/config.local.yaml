@@ -88,5 +88,5 @@ auth:
 log:
   is_json_format: true
   log_path: "data/logs"
-  log_file: "server.log"
+  log_file: "server.logger"
   maxAge: 7

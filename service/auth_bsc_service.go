@@ -13,8 +13,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"staking-interaction/common/config"
+	"staking-interaction/common/logger"
 	"staking-interaction/dto"
-	"staking-interaction/middleware"
 	"staking-interaction/repository"
 	"strings"
 	"time"
@@ -28,7 +28,7 @@ type AuthBSCService struct {
 
 func NewAuthBSCService(redis *redis.Client) *AuthBSCService {
 	conf := config.Get()
-	log := middleware.GetLogger()
+	log := logger.GetLogger()
 	log.WithFields(logrus.Fields{
 		"module": "bsc_auth_service",         // 主模块名
 		"env":    conf.AppConfig.Environment, // 环境

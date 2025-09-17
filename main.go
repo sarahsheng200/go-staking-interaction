@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"staking-interaction/adapter"
 	"staking-interaction/common/config"
-	"staking-interaction/middleware"
+	"staking-interaction/common/logger"
 	srouter "staking-interaction/router"
 	"syscall"
 	"time"
@@ -18,7 +18,7 @@ import (
 
 func main() {
 	conf := config.Get()
-	log := middleware.GetLogger().WithFields(logrus.Fields{
+	log := logger.GetLogger().WithFields(logrus.Fields{
 		"module": "main",                     // 主模块名
 		"env":    conf.AppConfig.Environment, // 环境
 		"pid":    os.Getpid(),                // 进程号
@@ -98,7 +98,7 @@ func main() {
 	log.Println("shutdown server...")
 
 	//listener.CloseListener()
-	//log.Println("stake event listener closed")
+	//logger.Println("stake event listener closed")
 
 	// 创建5s的超时上下文
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

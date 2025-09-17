@@ -3,13 +3,11 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"log"
 	"staking-interaction/controller"
 	"staking-interaction/middleware"
 )
 
 func InitRouter(redis *redis.Client) *gin.Engine {
-	log.Println("Initializing router")
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())

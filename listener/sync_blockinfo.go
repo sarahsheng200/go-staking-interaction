@@ -475,7 +475,7 @@ func (s *SyncBlock) executeTransactionWithLock(
 			CreatedAt:   time.Now(),
 		}
 		if err := txRepo.AddTransactionLog(&transLog); err != nil {
-			return fmt.Errorf("add transaction log: %w", err)
+			return fmt.Errorf("add transaction logger: %w", err)
 		}
 
 		// 更新资产余额（使用乐观锁）

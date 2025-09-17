@@ -5,15 +5,15 @@ import (
 	"os/signal"
 	"staking-interaction/adapter"
 	"staking-interaction/common/config"
+	"staking-interaction/common/logger"
 	redisClient "staking-interaction/common/redis"
 	"staking-interaction/listener"
-	"staking-interaction/middleware"
 	"staking-interaction/service"
 	"syscall"
 )
 
 func main() {
-	log := middleware.GetLogger()
+	log := logger.GetLogger()
 	log.WithFields(map[string]interface{}{
 		"module": "cmd/syncblock",
 	})

@@ -19,7 +19,7 @@ type Config struct {
 	RedisConfig      `yaml:"redis"`
 	BlockchainConfig `yaml:"blockchain"`
 	AuthConfig       `yaml:"auth"`
-	LogConfig        `yaml:"log"`
+	LogConfig        `yaml:"logger"`
 }
 
 // ===== 应用配置模块 =====

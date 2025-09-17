@@ -65,7 +65,7 @@ type ContractsTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// ContractsFilterer is an auto generated log filtering Go binding around an Ethereum contract events.
+// ContractsFilterer is an auto generated logger filtering Go binding around an Ethereum contract events.
 type ContractsFilterer struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
@@ -134,7 +134,7 @@ func NewContractsTransactor(address common.Address, transactor bind.ContractTran
 	return &ContractsTransactor{contract: contract}, nil
 }
 
-// NewContractsFilterer creates a new log filterer instance of Contracts, bound to a specific deployed contract.
+// NewContractsFilterer creates a new logger filterer instance of Contracts, bound to a specific deployed contract.
 func NewContractsFilterer(address common.Address, filterer bind.ContractFilterer) (*ContractsFilterer, error) {
 	contract, err := bindContracts(address, nil, nil, filterer)
 	if err != nil {
@@ -485,7 +485,7 @@ func (_Contracts *ContractsTransactorSession) Withdraw(stakeIndex *big.Int) (*ty
 
 // ContractsStakedIterator is returned from FilterStaked and is used to iterate over the raw logs and unpacked data for Staked events raised by the Contracts contract.
 type ContractsStakedIterator struct {
-	Event *ContractsStaked // Event containing the contract specifics and raw log
+	Event *ContractsStaked // Event containing the contract specifics and raw logger
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -560,7 +560,7 @@ type ContractsStaked struct {
 	Raw        types.Log // Blockchain specific contextual infos
 }
 
-// FilterStaked is a free log retrieval operation binding the contract event 0x022dd619ee0d92140e5abde105761d6df71c05c4fcb761610ea0552064f91e6c.
+// FilterStaked is a free logger retrieval operation binding the contract event 0x022dd619ee0d92140e5abde105761d6df71c05c4fcb761610ea0552064f91e6c.
 //
 // Solidity: event Staked(address indexed user, uint256 amount, uint8 period, uint256 stakeIndex, uint256 timestamp)
 func (_Contracts *ContractsFilterer) FilterStaked(opts *bind.FilterOpts, user []common.Address) (*ContractsStakedIterator, error) {
@@ -577,7 +577,7 @@ func (_Contracts *ContractsFilterer) FilterStaked(opts *bind.FilterOpts, user []
 	return &ContractsStakedIterator{contract: _Contracts.contract, event: "Staked", logs: logs, sub: sub}, nil
 }
 
-// WatchStaked is a free log subscription operation binding the contract event 0x022dd619ee0d92140e5abde105761d6df71c05c4fcb761610ea0552064f91e6c.
+// WatchStaked is a free logger subscription operation binding the contract event 0x022dd619ee0d92140e5abde105761d6df71c05c4fcb761610ea0552064f91e6c.
 //
 // Solidity: event Staked(address indexed user, uint256 amount, uint8 period, uint256 stakeIndex, uint256 timestamp)
 func (_Contracts *ContractsFilterer) WatchStaked(opts *bind.WatchOpts, sink chan<- *ContractsStaked, user []common.Address) (event.Subscription, error) {
@@ -596,7 +596,7 @@ func (_Contracts *ContractsFilterer) WatchStaked(opts *bind.WatchOpts, sink chan
 		for {
 			select {
 			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
+				// New logger arrived, parse the event and forward to the user
 				event := new(ContractsStaked)
 				if err := _Contracts.contract.UnpackLog(event, "Staked", log); err != nil {
 					return err
@@ -619,7 +619,7 @@ func (_Contracts *ContractsFilterer) WatchStaked(opts *bind.WatchOpts, sink chan
 	}), nil
 }
 
-// ParseStaked is a log parse operation binding the contract event 0x022dd619ee0d92140e5abde105761d6df71c05c4fcb761610ea0552064f91e6c.
+// ParseStaked is a logger parse operation binding the contract event 0x022dd619ee0d92140e5abde105761d6df71c05c4fcb761610ea0552064f91e6c.
 //
 // Solidity: event Staked(address indexed user, uint256 amount, uint8 period, uint256 stakeIndex, uint256 timestamp)
 func (_Contracts *ContractsFilterer) ParseStaked(log types.Log) (*ContractsStaked, error) {
@@ -633,7 +633,7 @@ func (_Contracts *ContractsFilterer) ParseStaked(log types.Log) (*ContractsStake
 
 // ContractsWithdrawnIterator is returned from FilterWithdrawn and is used to iterate over the raw logs and unpacked data for Withdrawn events raised by the Contracts contract.
 type ContractsWithdrawnIterator struct {
-	Event *ContractsWithdrawn // Event containing the contract specifics and raw log
+	Event *ContractsWithdrawn // Event containing the contract specifics and raw logger
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -708,7 +708,7 @@ type ContractsWithdrawn struct {
 	Raw         types.Log // Blockchain specific contextual infos
 }
 
-// FilterWithdrawn is a free log retrieval operation binding the contract event 0x94ffd6b85c71b847775c89ef6496b93cee961bdc6ff827fd117f174f06f745ae.
+// FilterWithdrawn is a free logger retrieval operation binding the contract event 0x94ffd6b85c71b847775c89ef6496b93cee961bdc6ff827fd117f174f06f745ae.
 //
 // Solidity: event Withdrawn(address indexed user, uint256 stakeIndex, uint256 totalAmount, uint256 standAmount, uint256 reward)
 func (_Contracts *ContractsFilterer) FilterWithdrawn(opts *bind.FilterOpts, user []common.Address) (*ContractsWithdrawnIterator, error) {
@@ -725,7 +725,7 @@ func (_Contracts *ContractsFilterer) FilterWithdrawn(opts *bind.FilterOpts, user
 	return &ContractsWithdrawnIterator{contract: _Contracts.contract, event: "Withdrawn", logs: logs, sub: sub}, nil
 }
 
-// WatchWithdrawn is a free log subscription operation binding the contract event 0x94ffd6b85c71b847775c89ef6496b93cee961bdc6ff827fd117f174f06f745ae.
+// WatchWithdrawn is a free logger subscription operation binding the contract event 0x94ffd6b85c71b847775c89ef6496b93cee961bdc6ff827fd117f174f06f745ae.
 //
 // Solidity: event Withdrawn(address indexed user, uint256 stakeIndex, uint256 totalAmount, uint256 standAmount, uint256 reward)
 func (_Contracts *ContractsFilterer) WatchWithdrawn(opts *bind.WatchOpts, sink chan<- *ContractsWithdrawn, user []common.Address) (event.Subscription, error) {
@@ -744,7 +744,7 @@ func (_Contracts *ContractsFilterer) WatchWithdrawn(opts *bind.WatchOpts, sink c
 		for {
 			select {
 			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
+				// New logger arrived, parse the event and forward to the user
 				event := new(ContractsWithdrawn)
 				if err := _Contracts.contract.UnpackLog(event, "Withdrawn", log); err != nil {
 					return err
@@ -767,7 +767,7 @@ func (_Contracts *ContractsFilterer) WatchWithdrawn(opts *bind.WatchOpts, sink c
 	}), nil
 }
 
-// ParseWithdrawn is a log parse operation binding the contract event 0x94ffd6b85c71b847775c89ef6496b93cee961bdc6ff827fd117f174f06f745ae.
+// ParseWithdrawn is a logger parse operation binding the contract event 0x94ffd6b85c71b847775c89ef6496b93cee961bdc6ff827fd117f174f06f745ae.
 //
 // Solidity: event Withdrawn(address indexed user, uint256 stakeIndex, uint256 totalAmount, uint256 standAmount, uint256 reward)
 func (_Contracts *ContractsFilterer) ParseWithdrawn(log types.Log) (*ContractsWithdrawn, error) {

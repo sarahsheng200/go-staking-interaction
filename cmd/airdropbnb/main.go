@@ -5,13 +5,13 @@ import (
 	"math/big"
 	"os"
 	"staking-interaction/adapter"
-	"staking-interaction/middleware"
+	"staking-interaction/common/logger"
 	"staking-interaction/service"
 	"staking-interaction/utils"
 )
 
 func main() {
-	log := middleware.GetLogger()
+	log := logger.GetLogger()
 	log.WithFields(map[string]interface{}{
 		"module": "cmd/airdropbnb",
 	})

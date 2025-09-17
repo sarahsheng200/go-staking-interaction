@@ -43,10 +43,10 @@ type Log struct {
 	BlockHash common.Hash `json:"blockHash" rlp:"-"`
 	// timestamp of the block in which the transaction was included
 	BlockTimestamp uint64 `json:"blockTimestamp" rlp:"-"`
-	// index of the log in the block
+	// index of the logger in the block
 	Index uint `json:"logIndex" rlp:"-"`
 
-	// The Removed field is true if this log was reverted due to a chain reorganisation.
+	// The Removed field is true if this logger was reverted due to a chain reorganisation.
 	// You must pay attention to this field if you receive logs through a filter query.
 	Removed bool `json:"removed" rlp:"-"`
 }

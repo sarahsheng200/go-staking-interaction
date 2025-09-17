@@ -1,4 +1,4 @@
-package middleware
+package logger
 
 import (
 	"github.com/lestrrat/go-file-rotatelogs"
@@ -64,8 +64,8 @@ func GetLogger() *logrus.Logger {
 func writeFile(logPath string, filename string, maxAge time.Duration, formatter logrus.Formatter) {
 	// Info、Debug、Warn 级别写 info 日志
 	infoWriter, err := rotatelogs.New(
-		strings.Replace(filename, ".log", "_info_", -1)+".%Y%m%d.log",
-		rotatelogs.WithLinkName(path.Join(logPath, "info.log")),
+		strings.Replace(filename, ".logger", "_info_", -1)+".%Y%m%d.logger",
+		rotatelogs.WithLinkName(path.Join(logPath, "info.logger")),
 		rotatelogs.WithMaxAge(maxAge*24*time.Hour),
 		rotatelogs.WithRotationTime(24*time.Hour),
 	)
@@ -76,8 +76,8 @@ func writeFile(logPath string, filename string, maxAge time.Duration, formatter 
 
 	// Error、Fatal、Panic 级别写 error 日志
 	errWriter, err := rotatelogs.New(
-		strings.Replace(filename, ".log", "_err_", -1)+".%Y%m%d.log",
-		rotatelogs.WithLinkName(path.Join(logPath, "error.log")),
+		strings.Replace(filename, ".logger", "_err_", -1)+".%Y%m%d.logger",
+		rotatelogs.WithLinkName(path.Join(logPath, "error.logger")),
 		rotatelogs.WithMaxAge(maxAge*24*time.Hour),
 		rotatelogs.WithRotationTime(24*time.Hour),
 	)

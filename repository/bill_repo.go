@@ -16,3 +16,19 @@ func AddBill(bill *model.Bill) error {
 	}
 	return nil
 }
+
+// AddBill 事务内创建账单
+func (t *TxRepository) AddBill(bill *model.Bill) error {
+	if err := t.db.Create(bill).Error; err != nil {
+		return fmt.Errorf("tx add bill failed: %w", err)
+	}
+	return nil
+}
+
+// AddBill 事务内创建账单
+func (w *SwRepo) AddBill(bill *model.Bill) error {
+	if err := w.db.Create(bill).Error; err != nil {
+		return fmt.Errorf("tx add bill failed: %w", err)
+	}
+	return nil
+}

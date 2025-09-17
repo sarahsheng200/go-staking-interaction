@@ -186,7 +186,7 @@ func handleERC20Tx(tx *types.Transaction, receipt *types.Receipt, accountId int)
 		BlockNumber: receipt.BlockNumber.String(),
 	}
 	if err := repository.AddTransactionLog(&transLog); err != nil {
-		fmt.Println("SyncBlockInfo: Failed to add transaction log: ", err)
+		fmt.Println("SyncBlockInfo: Failed to add transaction logger: ", err)
 		return
 	}
 
@@ -196,7 +196,7 @@ func handleERC20Tx(tx *types.Transaction, receipt *types.Receipt, accountId int)
 	}
 
 	isSyncRunning = false
-	fmt.Println("SyncBlockInfo: add log and bill success ", transLog)
+	fmt.Println("SyncBlockInfo: add logger and bill success ", transLog)
 }
 
 func parseERC20TxByReceipt(receipt *types.Receipt) (*dto.TransferEvent, error) {
@@ -303,7 +303,7 @@ func handleBnbTx(tx *types.Transaction, from common.Address, receipt *types.Rece
 		BlockNumber: receipt.BlockNumber.String(),
 	}
 	if err := repository.AddTransactionLog(&transLog); err != nil {
-		fmt.Println("handleBnbTx: Failed to add transaction log: ", err)
+		fmt.Println("handleBnbTx: Failed to add transaction logger: ", err)
 		return
 	}
 
@@ -311,7 +311,7 @@ func handleBnbTx(tx *types.Transaction, from common.Address, receipt *types.Rece
 	if err := repository.UpdateAsset(asset); err != nil {
 		fmt.Println("handleBnbTx: Failed to update asset: ", err)
 	}
-	fmt.Println("handleBnbTx: add log and bill success ")
+	fmt.Println("handleBnbTx: add logger and bill success ")
 }
 
 func parseERC20TxByData(tx *types.Transaction) (*big.Int, error) {

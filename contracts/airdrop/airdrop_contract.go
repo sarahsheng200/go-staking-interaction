@@ -55,7 +55,7 @@ type ContractsTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// ContractsFilterer is an auto generated log filtering Go binding around an Ethereum contract events.
+// ContractsFilterer is an auto generated logger filtering Go binding around an Ethereum contract events.
 type ContractsFilterer struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
@@ -124,7 +124,7 @@ func NewContractsTransactor(address common.Address, transactor bind.ContractTran
 	return &ContractsTransactor{contract: contract}, nil
 }
 
-// NewContractsFilterer creates a new log filterer instance of Contracts, bound to a specific deployed contract.
+// NewContractsFilterer creates a new logger filterer instance of Contracts, bound to a specific deployed contract.
 func NewContractsFilterer(address common.Address, filterer bind.ContractFilterer) (*ContractsFilterer, error) {
 	contract, err := bindContracts(address, nil, nil, filterer)
 	if err != nil {
@@ -453,7 +453,7 @@ func (_Contracts *ContractsTransactorSession) Receive() (*types.Transaction, err
 
 // ContractsAirdroppedIterator is returned from FilterAirdropped and is used to iterate over the raw logs and unpacked data for Airdropped events raised by the Contracts contract.
 type ContractsAirdroppedIterator struct {
-	Event *ContractsAirdropped // Event containing the contract specifics and raw log
+	Event *ContractsAirdropped // Event containing the contract specifics and raw logger
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -528,7 +528,7 @@ type ContractsAirdropped struct {
 	Raw          types.Log // Blockchain specific contextual infos
 }
 
-// FilterAirdropped is a free log retrieval operation binding the contract event 0x09774238ea40ec1a48a376dc3060f04f61a6237737e10bba887991699c4d1bc8.
+// FilterAirdropped is a free logger retrieval operation binding the contract event 0x09774238ea40ec1a48a376dc3060f04f61a6237737e10bba887991699c4d1bc8.
 //
 // Solidity: event Airdropped(address indexed addr, uint256 amount, uint256 processIndex, uint256 timestamp, string symbol)
 func (_Contracts *ContractsFilterer) FilterAirdropped(opts *bind.FilterOpts, addr []common.Address) (*ContractsAirdroppedIterator, error) {
@@ -545,7 +545,7 @@ func (_Contracts *ContractsFilterer) FilterAirdropped(opts *bind.FilterOpts, add
 	return &ContractsAirdroppedIterator{contract: _Contracts.contract, event: "Airdropped", logs: logs, sub: sub}, nil
 }
 
-// WatchAirdropped is a free log subscription operation binding the contract event 0x09774238ea40ec1a48a376dc3060f04f61a6237737e10bba887991699c4d1bc8.
+// WatchAirdropped is a free logger subscription operation binding the contract event 0x09774238ea40ec1a48a376dc3060f04f61a6237737e10bba887991699c4d1bc8.
 //
 // Solidity: event Airdropped(address indexed addr, uint256 amount, uint256 processIndex, uint256 timestamp, string symbol)
 func (_Contracts *ContractsFilterer) WatchAirdropped(opts *bind.WatchOpts, sink chan<- *ContractsAirdropped, addr []common.Address) (event.Subscription, error) {
@@ -564,7 +564,7 @@ func (_Contracts *ContractsFilterer) WatchAirdropped(opts *bind.WatchOpts, sink 
 		for {
 			select {
 			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
+				// New logger arrived, parse the event and forward to the user
 				event := new(ContractsAirdropped)
 				if err := _Contracts.contract.UnpackLog(event, "Airdropped", log); err != nil {
 					return err
@@ -587,7 +587,7 @@ func (_Contracts *ContractsFilterer) WatchAirdropped(opts *bind.WatchOpts, sink 
 	}), nil
 }
 
-// ParseAirdropped is a log parse operation binding the contract event 0x09774238ea40ec1a48a376dc3060f04f61a6237737e10bba887991699c4d1bc8.
+// ParseAirdropped is a logger parse operation binding the contract event 0x09774238ea40ec1a48a376dc3060f04f61a6237737e10bba887991699c4d1bc8.
 //
 // Solidity: event Airdropped(address indexed addr, uint256 amount, uint256 processIndex, uint256 timestamp, string symbol)
 func (_Contracts *ContractsFilterer) ParseAirdropped(log types.Log) (*ContractsAirdropped, error) {
@@ -601,7 +601,7 @@ func (_Contracts *ContractsFilterer) ParseAirdropped(log types.Log) (*ContractsA
 
 // ContractsOwnershipTransferredIterator is returned from FilterOwnershipTransferred and is used to iterate over the raw logs and unpacked data for OwnershipTransferred events raised by the Contracts contract.
 type ContractsOwnershipTransferredIterator struct {
-	Event *ContractsOwnershipTransferred // Event containing the contract specifics and raw log
+	Event *ContractsOwnershipTransferred // Event containing the contract specifics and raw logger
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -673,7 +673,7 @@ type ContractsOwnershipTransferred struct {
 	Raw           types.Log // Blockchain specific contextual infos
 }
 
-// FilterOwnershipTransferred is a free log retrieval operation binding the contract event 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0.
+// FilterOwnershipTransferred is a free logger retrieval operation binding the contract event 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0.
 //
 // Solidity: event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)
 func (_Contracts *ContractsFilterer) FilterOwnershipTransferred(opts *bind.FilterOpts, previousOwner []common.Address, newOwner []common.Address) (*ContractsOwnershipTransferredIterator, error) {
@@ -694,7 +694,7 @@ func (_Contracts *ContractsFilterer) FilterOwnershipTransferred(opts *bind.Filte
 	return &ContractsOwnershipTransferredIterator{contract: _Contracts.contract, event: "OwnershipTransferred", logs: logs, sub: sub}, nil
 }
 
-// WatchOwnershipTransferred is a free log subscription operation binding the contract event 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0.
+// WatchOwnershipTransferred is a free logger subscription operation binding the contract event 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0.
 //
 // Solidity: event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)
 func (_Contracts *ContractsFilterer) WatchOwnershipTransferred(opts *bind.WatchOpts, sink chan<- *ContractsOwnershipTransferred, previousOwner []common.Address, newOwner []common.Address) (event.Subscription, error) {
@@ -717,7 +717,7 @@ func (_Contracts *ContractsFilterer) WatchOwnershipTransferred(opts *bind.WatchO
 		for {
 			select {
 			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
+				// New logger arrived, parse the event and forward to the user
 				event := new(ContractsOwnershipTransferred)
 				if err := _Contracts.contract.UnpackLog(event, "OwnershipTransferred", log); err != nil {
 					return err
@@ -740,7 +740,7 @@ func (_Contracts *ContractsFilterer) WatchOwnershipTransferred(opts *bind.WatchO
 	}), nil
 }
 
-// ParseOwnershipTransferred is a log parse operation binding the contract event 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0.
+// ParseOwnershipTransferred is a logger parse operation binding the contract event 0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0.
 //
 // Solidity: event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)
 func (_Contracts *ContractsFilterer) ParseOwnershipTransferred(log types.Log) (*ContractsOwnershipTransferred, error) {
